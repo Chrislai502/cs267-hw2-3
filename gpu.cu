@@ -118,15 +118,10 @@ void update_bin_ids_and_particle_ids(particle_t* parts, int num_parts, double si
     int num_bins = gridsize * gridsize;
 
     if (bin_ids && particle_ids) {
-        std::cout << "here 1.1" << std::endl;
         delete[] bin_ids;
-        std::cout << "here 1.2 " << particle_ids << std::endl;
         delete[] particle_ids;
-        std::cout << "here 1.3" << std::endl;
         bin_ids = new int[num_bins + 1];
-        std::cout << "here 1.4" << std::endl;
         memset(bin_ids, 0, (num_bins + 1) * sizeof(int));
-        std::cout << "here 1.5" << std::endl;
         particle_ids = nullptr;
     }
 
