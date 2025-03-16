@@ -112,7 +112,6 @@ __global__ void move_gpu(particle_t* particles, int num_parts, double size) {
 }
 
 void update_bin_ids_and_particle_ids(particle_t* parts, int num_parts, double size) {
-
     double cellsize = cutoff;
     int gridsize = (size / cellsize) + 1;
     int num_bins = gridsize * gridsize;
@@ -120,14 +119,19 @@ void update_bin_ids_and_particle_ids(particle_t* parts, int num_parts, double si
     if (bin_ids && particle_ids) {
         delete[] bin_ids;
         delete[] particle_ids;
-        bin_ids = new int[num_bins + 1];
-        memset(bin_ids, 0, (num_bins + 1) * sizeof(int));
+        bin_ids = new int[num_bins];
+        memset(bin_ids, 0, (num_bins) * sizeof(int));
         particle_ids = nullptr;
     }
 
     // bin_ids is now an array of the index of each bin
-    thrust::exclusive_scan(thrust::host, bin_counts, bin_counts + num_bins + 1, bin_ids);
+    thrust::exclusive_scan(thrust::host, bin_counts, bin_counts + num_bins, bin_ids);
     particle_ids = new particle_t[num_parts];
+
+    std::cout << "prefix sim " << std::endl;
+    for (int i = 0; i < num_bins; ++i) {
+        std::cout << "bin_ids " << bin_ids[i] << std::endl;
+    }
 
     // populate particles_ids sorted by bins
     int keep_track_array[num_bins] = {0}; // keeps track of how far into the bin the next particle should be
@@ -162,7 +166,7 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
     int gridsize = (size / cellsize) + 1;
 
     int num_bins = gridsize * gridsize;
-    bin_counts = new int[num_bins + 1];
+    bin_counts = new int[num_bins];
     memset(bin_counts, 0, num_bins * sizeof(int));
 
     // count the number of particles in each bin
