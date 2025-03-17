@@ -51,8 +51,10 @@ __global__ void count_particles_in_bins(particle_t * particles, int* bin_counts,
     particle_t* cur_particle = &particles[tid];
 
     // Calculate the bin ID based on the particle's current position
-    int grid_x = cur_particle->x / CELL_SIZE;
-    int grid_y = cur_particle->y / CELL_SIZE;
+    // int grid_x = cur_particle->x / CELL_SIZE;
+    // int grid_y = cur_particle->y / CELL_SIZE;
+    int grid_x = __double2int_rz(cur_particle->x / CELL_SIZE);
+    int grid_y = __double2int_rz(cur_particle->y / CELL_SIZE);
     int bin_id = grid_y * num_bins_along_axis + grid_x;
 
     // Updating the bin_counts array
@@ -104,8 +106,10 @@ __global__ void compute_forces_bins(particle_t* particles, int* particle_indices
     int particle_id = particle_indices[tid]; // Fetching it into registers first for better coalescing
     particle_t* particle = &particles[particle_id]; // TODO: This is random access for now, pending sorting this with SOA
     
-    int cur_bin_r = particle->y / CELL_SIZE; // TODO: Some Hack     int cur_bin_r = __double2int_rz(particle->y / CELL_SIZE);  // Faster integer conversion
-    int cur_bin_c = particle->x / CELL_SIZE;
+    // int cur_bin_r = particle->y / CELL_SIZE; // TODO: Some Hack     int cur_bin_r = __double2int_rz(particle->y / CELL_SIZE);  // Faster integer conversion
+    // int cur_bin_c = particle->x / CELL_SIZE;
+    int cur_bin_r = __double2int_rz(particle->y / CELL_SIZE);
+    int cur_bin_c = __double2int_rz(particle->x / CELL_SIZE);
 
     // zero out acceleration
     particle->ax = particle->ay = 0;
@@ -126,8 +130,7 @@ __global__ void compute_forces_bins(particle_t* particles, int* particle_indices
         int bin_offset = prefix_sum[adj_grid_id];
         int bin_size = bin_counts[adj_grid_id];
 
-        // if (bin_size == 0) { // Remove for cuda kernel cycle optimization
-        //     // nothing to iterate
+        // if (bin_size == 0) { // Interesting how this might actually reduce the runtime in GPUs?
         //     continue;
         // }
         
@@ -173,8 +176,10 @@ __global__ void move_gpu(particle_t* particles, int * particle_indices, int* par
     }
 
     // update bin ID
-    int bin_row = p->y / CELL_SIZE;
-    int bin_col = p->x / CELL_SIZE;
+    // int bin_row = p->y / CELL_SIZE;
+    // int bin_col = p->x / CELL_SIZE;
+    int bin_row = __double2int_rz(p->y / CELL_SIZE);
+    int bin_col = __double2int_rz(p->x / CELL_SIZE);
     int bin_id = bin_row * num_bins_along_axis + bin_col;
     particle_bin_ids[tid] = bin_id;
 }
@@ -184,8 +189,10 @@ __global__ void init_particle_bins(particle_t* parts, int* particle_bin_ids, int
     if (tid >= num_parts) return;
 
     particle_t* cur_particle = &parts[tid];
-    int bin_row = cur_particle->y / CELL_SIZE;
-    int bin_col = cur_particle->x / CELL_SIZE;
+    // int bin_row = cur_particle->y / CELL_SIZE;
+    // int bin_col = cur_particle->x / CELL_SIZE;
+    int bin_row = __double2int_rz(cur_particle->y / CELL_SIZE);
+    int bin_col = __double2int_rz(cur_particle->x / CELL_SIZE);
     int bin_id = bin_row * num_bins_along_axis + bin_col;
 
     particle_bin_ids[tid] = bin_id;
