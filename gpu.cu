@@ -9,7 +9,7 @@
 #include <thrust/sort.h>
 
 #define NUM_THREADS   256
-#define MULTIPLIER    8
+#define MULTIPLIER    1
 #define CELL_SIZE     (MULTIPLIER * cutoff)
 // #define ENABLE_TIMERS 1
 
