@@ -1,14 +1,15 @@
 #include "common.h"
 #include <cuda.h>
+#include <iostream>
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
 #include <thrust/host_vector.h>
 #include <thrust/memory.h>
 #include <thrust/scan.h>
-#include <iostream>
+#include <thrust/sort.h>
 
 #define NUM_THREADS 256
-#define MULTIPLIER  16
+#define MULTIPLIER  1
 #define CELL_SIZE   MULTIPLIER* cutoff
 
 // Put any static global variables here that you will use throughout the simulation.
@@ -31,7 +32,8 @@ int* cpu_prefix_sum;
  *
  * Only modifies `bin_counts`, and does not update the `bin_id` in `particle_info`.
  */
-__global__ void count_particles_in_bins(particle_info_t* particle_info, int* bin_counts, int num_parts, int num_bins_along_axis) {
+__global__ void count_particles_in_bins(particle_info_t* particle_info, int* bin_counts,
+                                        int num_parts, int num_bins_along_axis) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     if (tid >= num_parts)
         return; // If the thread exceeds the number of particles, return
@@ -77,7 +79,62 @@ __global__ void compute_forces_gpu(particle_t* particles, int num_parts) {
         apply_force_gpu(particles[tid], particles[j]);
 }
 
-__global__ void move_gpu(particle_info_t* particle_info, int num_parts, double size, int num_bins_along_axis) {
+// list of adjacencies
+__device__ int ALL_ADJ[9][2] = {{-1, -1}, {-1, 0}, {-1, 1}, {0, -1}, {0, 1},
+                                {1, -1},  {1, 0},  {1, 1},  {0, 0}};
+
+/**
+ * Compute forces, using the bins provided
+ */
+__global__ void compute_forces_bins(particle_info_t* particle_info, int* bin_counts,
+                                    int* prefix_sum, int num_parts, int num_bins_along_axis) {
+    // Get thread (particle) ID
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    if (tid >= num_parts)
+        return;
+
+    particle_info_t* cur_info = &particle_info[tid];
+    // int cur_bin = cur_info->bin_id;
+    // int cur_bin_r = cur_bin / num_bins_along_axis;
+    // int cur_bin_c = cur_bin % num_bins_along_axis;
+    int cur_bin_r = cur_info->particle->y / CELL_SIZE;
+    int cur_bin_c = cur_info->particle->x / CELL_SIZE;
+    // int cur_bin_id = cur_bin_r * num_bins_along_axis + cur_bin_c;
+
+    // zero out acceleration
+    cur_info->particle->ax = cur_info->particle->ay = 0;
+
+    for (int adj_idx = 0; adj_idx < 9; ++adj_idx) {
+        auto dir = ALL_ADJ[adj_idx];
+        int adj_grid_r = cur_bin_r + dir[0];
+        int adj_grid_c = cur_bin_c + dir[1];
+        int adj_grid_id = adj_grid_r * num_bins_along_axis + adj_grid_c;
+
+        // check bounds
+        if (adj_grid_r < 0 || adj_grid_r >= num_bins_along_axis || adj_grid_c < 0 ||
+            adj_grid_c >= num_bins_along_axis) {
+            continue;
+        }
+
+
+        // get the index of the adjacent bin
+        int bin_offset = prefix_sum[adj_grid_id];
+        int bin_size = bin_counts[adj_grid_id];
+
+        // printf("[%d] expected bin id %d; offset %d, size %d\n", tid, adj_grid_id, bin_offset, bin_size);
+
+        // iterate through all particles in the bin to compute forces
+        for (int bin_particle_idx = bin_offset; bin_particle_idx < bin_offset + bin_size;
+             ++bin_particle_idx) {
+            particle_info_t* adj_info = &particle_info[bin_particle_idx];
+            // printf("[%d] adj bin id %d\n", tid, adj_info->bin_id);
+            apply_force_gpu(*cur_info->particle, *adj_info->particle);
+        }
+    }
+}
+
+__global__ void move_gpu(particle_info_t* particle_info, int num_parts, double size,
+                         int num_bins_along_axis) {
 
     // Get thread (particle) ID
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
@@ -114,10 +171,11 @@ __global__ void move_gpu(particle_info_t* particle_info, int num_parts, double s
     cur_info->bin_id = bin_id;
 }
 
-__global__ void init_particle_info(particle_t* parts, particle_info_t* particle_info, int num_parts, int num_bins_along_axis) {
+__global__ void init_particle_info(particle_t* parts, particle_info_t* particle_info, int num_parts,
+                                   int num_bins_along_axis) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    if (tid >= num_parts) return;
-
+    if (tid >= num_parts)
+        return;
 
     particle_t* cur_particle = &parts[tid];
     int bin_row = cur_particle->y / CELL_SIZE;
@@ -127,8 +185,13 @@ __global__ void init_particle_info(particle_t* parts, particle_info_t* particle_
     // std::cout << "(" << bin_row << ", " << bin_col << ") id " << bin_id << std::endl;
 
     particle_info[tid] = {cur_particle, bin_id};
-
 }
+
+struct part_info_comparator {
+    __host__ __device__ bool operator()(particle_info_t& info1, particle_info_t& info2) {
+        return info1.bin_id < info2.bin_id;
+    }
+};
 
 void init_simulation(particle_t* parts, int num_parts, double size) {
     // You can use this space to initialize data objects that you may need
@@ -151,18 +214,25 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
     // std::cout << "done malloc" << std::endl;
 
     // Initialize the particle_info array
-    init_particle_info<<<blks, NUM_THREADS>>>(parts, cpu_particle_info, num_parts, num_bins_along_axis);
+    init_particle_info<<<blks, NUM_THREADS>>>(parts, cpu_particle_info, num_parts,
+                                              num_bins_along_axis);
 
     // Count the number of particles in each bin
     cudaMemset(cpu_bin_counts, 0, num_bins * sizeof(int));
-    count_particles_in_bins<<<blks, NUM_THREADS>>>(cpu_particle_info, cpu_bin_counts, num_parts, num_bins_along_axis);
+    count_particles_in_bins<<<blks, NUM_THREADS>>>(cpu_particle_info, cpu_bin_counts, num_parts,
+                                                   num_bins_along_axis);
 
     // std::cout << "done init bin counts array" << std::endl;
 
     // Do a Prefix Sum to get the starting indices prefix_sum
+    auto device_particle_info = thrust::device_pointer_cast(cpu_particle_info);
     auto device_bin_counts = thrust::device_pointer_cast(cpu_bin_counts);
     auto device_prefix_sum = thrust::device_pointer_cast(cpu_prefix_sum);
-    thrust::exclusive_scan(thrust::device, device_bin_counts, device_bin_counts + num_bins, device_prefix_sum);
+    thrust::exclusive_scan(thrust::device, device_bin_counts, device_bin_counts + num_bins,
+                           device_prefix_sum);
+
+    thrust::sort(thrust::device, device_particle_info, device_particle_info + num_parts,
+                 part_info_comparator());
     // std::cout << "done init prefix sum" << std::endl;
 }
 
@@ -176,7 +246,10 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
 
     // Compute forces
     // TODO: rewrite to use bins
-    compute_forces_gpu<<<blks, NUM_THREADS>>>(parts, num_parts); // one worker per particle
+    // compute_forces_gpu<<<blks, NUM_THREADS>>>(parts, num_parts); // one worker per particle
+    compute_forces_bins<<<blks, NUM_THREADS>>>(cpu_particle_info, cpu_bin_counts, cpu_prefix_sum,
+                                               num_parts,
+                                               num_bins_along_axis); // one worker per particle
     // std::cout << "done compute forces" << std::endl;
 
     // Move particles (Modified to also update the bin_ids upon moving)
@@ -185,12 +258,20 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
 
     // Update the bin_count array
     cudaMemset(cpu_bin_counts, 0, num_bins * sizeof(int));
-    count_particles_in_bins<<<blks, NUM_THREADS>>>(cpu_particle_info, cpu_bin_counts, num_bins, num_bins_along_axis);
+    count_particles_in_bins<<<blks, NUM_THREADS>>>(cpu_particle_info, cpu_bin_counts, num_parts,
+                                                   num_bins_along_axis);
     // std::cout << "done count particles in bins" << std::endl;
 
     // Calculate the prefix sum of the count array
+    auto device_particle_info = thrust::device_pointer_cast(cpu_particle_info);
     auto device_bin_counts = thrust::device_pointer_cast(cpu_bin_counts);
     auto device_prefix_sum = thrust::device_pointer_cast(cpu_prefix_sum);
-    thrust::exclusive_scan(thrust::device, device_bin_counts, device_bin_counts + num_bins, device_prefix_sum);
+    thrust::exclusive_scan(thrust::device, device_bin_counts, device_bin_counts + num_bins,
+                           device_prefix_sum);
     // std::cout << "done exclusive scan" << std::endl;
+
+    // Sort the Particle ID Array
+    // https://nvidia.github.io/cccl/thrust/api/function_group__sorting_1ga7a399a3801f1684d465f4adbac462982.html
+    thrust::sort(thrust::device, device_particle_info, device_particle_info + num_parts,
+                 part_info_comparator());
 }
