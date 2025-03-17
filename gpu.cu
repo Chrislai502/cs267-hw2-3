@@ -8,9 +8,10 @@
 #include <thrust/scan.h>
 #include <thrust/sort.h>
 
-#define NUM_THREADS 256
-#define MULTIPLIER  1
-#define CELL_SIZE   MULTIPLIER* cutoff
+#define NUM_THREADS   256
+#define MULTIPLIER    8
+#define CELL_SIZE     (MULTIPLIER * cutoff)
+// #define ENABLE_TIMERS 1
 
 // Put any static global variables here that you will use throughout the simulation.
 int blks;
@@ -100,6 +101,8 @@ __global__ void compute_forces_bins(particle_info_t* particle_info, int* bin_cou
     int cur_bin_r = cur_info->particle->y / CELL_SIZE;
     int cur_bin_c = cur_info->particle->x / CELL_SIZE;
     // int cur_bin_id = cur_bin_r * num_bins_along_axis + cur_bin_c;
+    // printf("[%d] cur id %d; (%f, %f), cell size %f\n", tid, cur_bin_id, cur_info->particle->x,
+    //        cur_info->particle->y, CELL_SIZE);
 
     // zero out acceleration
     cur_info->particle->ax = cur_info->particle->ay = 0;
@@ -116,12 +119,17 @@ __global__ void compute_forces_bins(particle_info_t* particle_info, int* bin_cou
             continue;
         }
 
-
         // get the index of the adjacent bin
         int bin_offset = prefix_sum[adj_grid_id];
         int bin_size = bin_counts[adj_grid_id];
 
-        // printf("[%d] expected bin id %d; offset %d, size %d\n", tid, adj_grid_id, bin_offset, bin_size);
+        if (bin_size == 0) {
+            // nothing to iterate
+            continue;
+        }
+
+        // printf("[%d] expected bin id %d; offset %d, size %d\n", tid, adj_grid_id, bin_offset,
+        // bin_size); printf("offset %d, size %d\n", bin_offset, bin_size);
 
         // iterate through all particles in the bin to compute forces
         for (int bin_particle_idx = bin_offset; bin_particle_idx < bin_offset + bin_size;
@@ -240,9 +248,20 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
     // parts live in GPU memory
     // Rewrite this function
 
+#ifdef ENABLE_TIMERS
+    cudaDeviceSynchronize();
+    auto total_start = std::chrono::steady_clock::now();
+#endif
+
     // dimensions for neighbor checks
     int num_bins_along_axis = size / (CELL_SIZE) + 1;
     int num_bins = num_bins_along_axis * num_bins_along_axis;
+
+#ifdef ENABLE_TIMERS
+    cudaDeviceSynchronize();
+    printf("\nSTART\n");
+    auto start = std::chrono::steady_clock::now();
+#endif
 
     // Compute forces
     // TODO: rewrite to use bins
@@ -251,16 +270,36 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
                                                num_parts,
                                                num_bins_along_axis); // one worker per particle
     // std::cout << "done compute forces" << std::endl;
+#ifdef ENABLE_TIMERS
+    cudaDeviceSynchronize();
+    auto end = std::chrono::steady_clock::now();
+    printf("compute forces %f\n", std::chrono::duration<double>(end - start).count());
+    start = std::chrono::steady_clock::now();
+#endif
 
     // Move particles (Modified to also update the bin_ids upon moving)
     move_gpu<<<blks, NUM_THREADS>>>(cpu_particle_info, num_parts, size, num_bins_along_axis);
     // std::cout << "done move particles" << std::endl;
+
+#ifdef ENABLE_TIMERS
+    cudaDeviceSynchronize();
+    end = std::chrono::steady_clock::now();
+    printf("move gpu %f\n", std::chrono::duration<double>(end - start).count());
+    start = std::chrono::steady_clock::now();
+#endif
 
     // Update the bin_count array
     cudaMemset(cpu_bin_counts, 0, num_bins * sizeof(int));
     count_particles_in_bins<<<blks, NUM_THREADS>>>(cpu_particle_info, cpu_bin_counts, num_parts,
                                                    num_bins_along_axis);
     // std::cout << "done count particles in bins" << std::endl;
+
+#ifdef ENABLE_TIMERS
+    cudaDeviceSynchronize();
+    end = std::chrono::steady_clock::now();
+    printf("count particles %f\n", std::chrono::duration<double>(end - start).count());
+    start = std::chrono::steady_clock::now();
+#endif
 
     // Calculate the prefix sum of the count array
     auto device_particle_info = thrust::device_pointer_cast(cpu_particle_info);
@@ -270,8 +309,24 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
                            device_prefix_sum);
     // std::cout << "done exclusive scan" << std::endl;
 
+#ifdef ENABLE_TIMERS
+    cudaDeviceSynchronize();
+    end = std::chrono::steady_clock::now();
+    printf("exclusive scan %f\n", std::chrono::duration<double>(end - start).count());
+    start = std::chrono::steady_clock::now();
+#endif
+
     // Sort the Particle ID Array
     // https://nvidia.github.io/cccl/thrust/api/function_group__sorting_1ga7a399a3801f1684d465f4adbac462982.html
     thrust::sort(thrust::device, device_particle_info, device_particle_info + num_parts,
                  part_info_comparator());
+
+#ifdef ENABLE_TIMERS
+    cudaDeviceSynchronize();
+    end = std::chrono::steady_clock::now();
+    printf("sort %f\n", std::chrono::duration<double>(end - start).count());
+
+    auto total_end = std::chrono::steady_clock::now();
+    printf("total %f\n", std::chrono::duration<double>(total_end - total_start).count());
+#endif
 }
