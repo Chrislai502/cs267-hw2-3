@@ -143,6 +143,16 @@ int main(int argc, char** argv) {
     std::chrono::duration<double> diff = end_time - start_time;
     double seconds = diff.count();
 
+#ifdef ENABLE_TIMERS
+    std::cout << "=== Timer Breakdown (in seconds) ===\n";
+    std::cout << "Compute forces:          " << compute_force_time << "\n";
+    std::cout << "Move GPU:                " << move_gpu_time << "\n";
+    std::cout << "Count particles in bins: " << count_particles_in_bins_time << "\n";
+    std::cout << "Exclusive scan:          " << exclusive_scan_time << "\n";
+    std::cout << "Sort:                    " << sort_time << "\n";
+    std::cout << "Total simulation step:   " << total_compute_time << "\n";
+#endif
+
     // Finalize
     std::cout << "Simulation Time = " << seconds << " seconds for " << num_parts << " particles.\n";
     fsave.close();
