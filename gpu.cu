@@ -116,17 +116,20 @@ void update_bin_ids_and_particle_ids(particle_t* parts, int num_parts, double si
     int gridsize = (size / cellsize) + 1;
     int num_bins = gridsize * gridsize;
 
-    if (bin_ids && particle_ids) {
-        delete[] bin_ids;
-        delete[] particle_ids;
-        bin_ids = new int[num_bins];
-        memset(bin_ids, 0, (num_bins) * sizeof(int));
-        particle_ids = nullptr;
+    // reset particle_ids and bin_ids
+    memset(bin_counts, 0, num_bins * sizeof(int));
+
+    // count the number of particles in each bin
+    for (int i = 0; i < num_parts; ++i) {
+        int grid_r = parts[i].y / cellsize;
+        int grid_c = parts[i].x / cellsize;
+        bin_counts[grid_r * gridsize + grid_c]++;
     }
 
     // bin_ids is now an array of the index of each bin
     thrust::exclusive_scan(thrust::host, bin_counts, bin_counts + num_bins, bin_ids);
     particle_ids = new particle_t[num_parts];
+    memset(particle_ids, 0, (num_parts) * sizeof(int));
 
     // populate particles_ids sorted by bins
     int keep_track_array[num_bins] = {0}; // keeps track of how far into the bin the next particle should be
@@ -136,10 +139,6 @@ void update_bin_ids_and_particle_ids(particle_t* parts, int num_parts, double si
         int grid_c = parts[i].x / cellsize;
         int particle_idx = bin_ids[grid_r * gridsize + grid_c] + keep_track_array[grid_r * gridsize + grid_c];
         keep_track_array[grid_r * gridsize + grid_c]++;
-        // if (particle_idx < 0 || particle_idx >= num_parts) {
-        //     std::cout << "THIS SHOULDN'T HAPPEN " << " num_parts " << num_parts << " grid_r * gridsize + grid_c " << grid_r * gridsize + grid_c << " bin_ids[grid_r * gridsize + grid_c] " << bin_ids[grid_r * gridsize + grid_c] << " keep_track_array[grid_r * gridsize + grid_c] " << keep_track_array[grid_r * gridsize + grid_c] << std::endl;
-        //     std::cout << "particle_idx " << particle_idx << " bin_ids[num_bins-1] " << bin_ids[num_bins-1] << std::endl;
-        // }
         particle_ids[particle_idx] = parts[i];
     }
 }
@@ -162,17 +161,9 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
 
     int num_bins = gridsize * gridsize;
     bin_counts = new int[num_bins];
-    memset(bin_counts, 0, num_bins * sizeof(int));
-
-    // count the number of particles in each bin
-    for (int i = 0; i < num_parts; ++i) {
-        int grid_r = cpu_parts[i].y / cellsize;
-        int grid_c = cpu_parts[i].x / cellsize;
-        bin_counts[grid_r * gridsize + grid_c]++;
-    }
-
     bin_ids = new int[num_bins];
     memset(bin_ids, 0, (num_bins) * sizeof(int));
+
     update_bin_ids_and_particle_ids(cpu_parts, num_parts, size);
     delete[] cpu_parts;
 }
@@ -237,16 +228,6 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
         move(*particle, size);
 
     }
-    // reset particle_ids and bin_ids
-    memset(bin_counts, 0, num_bins * sizeof(int));
-
-    // count the number of particles in each bin
-    for (int i = 0; i < num_parts; ++i) {
-        int grid_r = cpu_parts[i].y / cellsize;
-        int grid_c = cpu_parts[i].x / cellsize;
-        bin_counts[grid_r * gridsize + grid_c]++;
-    }
-
     update_bin_ids_and_particle_ids(cpu_parts, num_parts, size);
     delete[] cpu_parts;
 }
