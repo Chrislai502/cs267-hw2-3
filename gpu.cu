@@ -136,8 +136,10 @@ __device__ void apply_force_gpu(particle_t& particle, particle_t& neighbor) {
 }
 
 // list of adjacencies
-__device__ int ALL_ADJ[9][2] = {{-1, -1}, {-1, 0}, {-1, 1}, {0, -1}, {0, 1},
-                                {1, -1},  {1, 0},  {1, 1},  {0, 0}};
+__device__ int ALL_ADJ[9][2] = {
+    {-1, -1}, {-1, 0}, {-1, 1}, 
+    {0 , -1}, {0 , 0}, {0 , 1},                            
+    {1 , -1}, {1 , 0}, {1 , 1},  };
 
 // /**
 //  * Compute forces, using the bins provided
