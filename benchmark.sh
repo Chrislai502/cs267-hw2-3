@@ -28,7 +28,7 @@ cd ..
 
 printf "\n=== WITH TIMERS ===\n\n"
 
-for n in 10000 100000 1000000 10000000; do
+for n in 1000 5000 10000 50000 100000 500000 1000000 5000000 10000000; do
     for i in 1 2 3; do
         ./build/gpu -n $n
         # add new line
