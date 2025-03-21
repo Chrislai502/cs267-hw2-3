@@ -1,0 +1,276 @@
+
+=== WITHOUT TIMERS ===
+
+Simulation Time = 0.0936174 seconds for 1000 particles.
+Simulation Time = 0.0905408 seconds for 1000 particles.
+Simulation Time = 0.0900562 seconds for 1000 particles.
+Simulation Time = 0.141018 seconds for 5000 particles.
+Simulation Time = 0.138336 seconds for 5000 particles.
+Simulation Time = 0.141839 seconds for 5000 particles.
+Simulation Time = 0.139655 seconds for 10000 particles.
+Simulation Time = 0.142174 seconds for 10000 particles.
+Simulation Time = 0.143217 seconds for 10000 particles.
+Simulation Time = 0.169625 seconds for 50000 particles.
+Simulation Time = 0.169817 seconds for 50000 particles.
+Simulation Time = 0.163859 seconds for 50000 particles.
+Simulation Time = 0.200391 seconds for 100000 particles.
+Simulation Time = 0.196103 seconds for 100000 particles.
+Simulation Time = 0.196833 seconds for 100000 particles.
+Simulation Time = 0.704081 seconds for 500000 particles.
+Simulation Time = 0.772929 seconds for 500000 particles.
+Simulation Time = 0.703028 seconds for 500000 particles.
+Simulation Time = 1.26746 seconds for 1000000 particles.
+Simulation Time = 1.2962 seconds for 1000000 particles.
+Simulation Time = 1.26117 seconds for 1000000 particles.
+Simulation Time = 6.05491 seconds for 5000000 particles.
+Simulation Time = 6.05999 seconds for 5000000 particles.
+Simulation Time = 6.19484 seconds for 5000000 particles.
+Simulation Time = 11.6317 seconds for 10000000 particles.
+Simulation Time = 11.6738 seconds for 10000000 particles.
+Simulation Time = 11.6014 seconds for 10000000 particles.
+
+=== WITH TIMERS ===
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.0211894
+Move GPU:                0.010459
+Count particles in bins: 0.0120352
+Exclusive scan:          0.019449
+Sort:                    0.0454326
+Total simulation step:   0.10981
+Simulation Time = 0.113006 seconds for 1000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.0213044
+Move GPU:                0.0104269
+Count particles in bins: 0.011814
+Exclusive scan:          0.0191735
+Sort:                    0.0451019
+Total simulation step:   0.109055
+Simulation Time = 0.112219 seconds for 1000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.0201817
+Move GPU:                0.0101246
+Count particles in bins: 0.0115653
+Exclusive scan:          0.0192497
+Sort:                    0.0438323
+Total simulation step:   0.106207
+Simulation Time = 0.109459 seconds for 1000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.0225893
+Move GPU:                0.0106395
+Count particles in bins: 0.0121024
+Exclusive scan:          0.0193852
+Sort:                    0.0933989
+Total simulation step:   0.159378
+Simulation Time = 0.16266 seconds for 5000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.0226899
+Move GPU:                0.0108026
+Count particles in bins: 0.0123362
+Exclusive scan:          0.0195663
+Sort:                    0.0939196
+Total simulation step:   0.160568
+Simulation Time = 0.163927 seconds for 5000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.0220033
+Move GPU:                0.0105009
+Count particles in bins: 0.0120414
+Exclusive scan:          0.0192206
+Sort:                    0.0910371
+Total simulation step:   0.15605
+Simulation Time = 0.159373 seconds for 5000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.0220555
+Move GPU:                0.0104386
+Count particles in bins: 0.011957
+Exclusive scan:          0.0191226
+Sort:                    0.0932018
+Total simulation step:   0.158007
+Simulation Time = 0.161322 seconds for 10000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.0228074
+Move GPU:                0.0107638
+Count particles in bins: 0.0122886
+Exclusive scan:          0.0195323
+Sort:                    0.0964818
+Total simulation step:   0.163123
+Simulation Time = 0.16648 seconds for 10000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.0229421
+Move GPU:                0.0108297
+Count particles in bins: 0.0124932
+Exclusive scan:          0.0197512
+Sort:                    0.0971124
+Total simulation step:   0.164378
+Simulation Time = 0.167688 seconds for 10000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.0274711
+Move GPU:                0.0173732
+Count particles in bins: 0.0144487
+Exclusive scan:          0.0230196
+Sort:                    0.106309
+Total simulation step:   0.189821
+Simulation Time = 0.193269 seconds for 50000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.0270563
+Move GPU:                0.0171574
+Count particles in bins: 0.0141752
+Exclusive scan:          0.0227434
+Sort:                    0.104403
+Total simulation step:   0.186732
+Simulation Time = 0.190118 seconds for 50000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.0276701
+Move GPU:                0.0175616
+Count particles in bins: 0.0145129
+Exclusive scan:          0.0230534
+Sort:                    0.106821
+Total simulation step:   0.190829
+Simulation Time = 0.194254 seconds for 50000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.0380279
+Move GPU:                0.0259802
+Count particles in bins: 0.0165798
+Exclusive scan:          0.0242667
+Sort:                    0.113334
+Total simulation step:   0.219418
+Simulation Time = 0.223016 seconds for 100000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.0380821
+Move GPU:                0.026043
+Count particles in bins: 0.0166188
+Exclusive scan:          0.0244602
+Sort:                    0.114297
+Total simulation step:   0.220708
+Simulation Time = 0.224217 seconds for 100000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.0360428
+Move GPU:                0.0247205
+Count particles in bins: 0.0158309
+Exclusive scan:          0.0234071
+Sort:                    0.106393
+Total simulation step:   0.2076
+Simulation Time = 0.211087 seconds for 100000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.174454
+Move GPU:                0.0911412
+Count particles in bins: 0.0333186
+Exclusive scan:          0.0334017
+Sort:                    0.413791
+Total simulation step:   0.747326
+Simulation Time = 0.751273 seconds for 500000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.182405
+Move GPU:                0.0961804
+Count particles in bins: 0.034995
+Exclusive scan:          0.0350358
+Sort:                    0.495208
+Total simulation step:   0.845027
+Simulation Time = 0.848942 seconds for 500000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.177639
+Move GPU:                0.0930337
+Count particles in bins: 0.0340545
+Exclusive scan:          0.0342403
+Sort:                    0.394031
+Total simulation step:   0.734203
+Simulation Time = 0.738135 seconds for 500000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.385217
+Move GPU:                0.209043
+Count particles in bins: 0.0858743
+Exclusive scan:          0.339483
+Sort:                    0.419253
+Total simulation step:   1.44011
+Simulation Time = 1.44433 seconds for 1000000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.383601
+Move GPU:                0.20861
+Count particles in bins: 0.0858923
+Exclusive scan:          0.284301
+Sort:                    0.374424
+Total simulation step:   1.33802
+Simulation Time = 1.34218 seconds for 1000000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          0.382896
+Move GPU:                0.208154
+Count particles in bins: 0.0857628
+Exclusive scan:          0.365635
+Sort:                    0.435538
+Total simulation step:   1.4792
+Simulation Time = 1.4834 seconds for 1000000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          2.16912
+Move GPU:                1.4422
+Count particles in bins: 0.946257
+Exclusive scan:          0.750846
+Sort:                    0.937569
+Total simulation step:   6.24719
+Simulation Time = 6.25341 seconds for 5000000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          2.17755
+Move GPU:                1.4463
+Count particles in bins: 0.946301
+Exclusive scan:          0.7634
+Sort:                    0.997896
+Total simulation step:   6.33267
+Simulation Time = 6.33841 seconds for 5000000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          2.17364
+Move GPU:                1.44824
+Count particles in bins: 0.946772
+Exclusive scan:          0.740521
+Sort:                    0.932709
+Total simulation step:   6.24309
+Simulation Time = 6.24888 seconds for 5000000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          4.37588
+Move GPU:                2.99238
+Count particles in bins: 2.07703
+Exclusive scan:          1.11477
+Sort:                    1.39663
+Total simulation step:   11.9579
+Simulation Time = 11.9656 seconds for 10000000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          4.37581
+Move GPU:                2.98987
+Count particles in bins: 2.07666
+Exclusive scan:          1.07647
+Sort:                    1.33333
+Total simulation step:   11.8534
+Simulation Time = 11.861 seconds for 10000000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:          4.37686
+Move GPU:                2.9897
+Count particles in bins: 2.07617
+Exclusive scan:          1.12591
+Sort:                    1.41441
+Total simulation step:   11.9843
+Simulation Time = 11.9919 seconds for 10000000 particles.
+
