@@ -7,6 +7,7 @@
 #include <thrust/memory.h>
 #include <thrust/scan.h>
 #include <thrust/sort.h>
+#include <thrust/gather.h>
 
 #ifndef NUMBER_THREADS
 #define NUMBER_THREADS   256
@@ -106,17 +107,41 @@ __global__ void aos_to_soa(const particle_t* aos, ParticleSOA soa, int num_parts
     }    
 }
 
+// __global__ void soa_to_aos(ParticleSOA soa, particle_t* aos, int num_parts) {
+//     int tid = threadIdx.x + blockIdx.x * blockDim.x;
+//     int particle_index = soa.particle_indices[tid];
+//     particle_t* particle = &aos[particle_index];
+//     if (tid < num_parts) {
+//         particle->x  = soa.x[tid];
+//         particle->y  = soa.y[tid];
+//         particle->vx = soa.vx[tid];
+//         particle->vy = soa.vy[tid];
+//         particle->ax = soa.ax[tid];
+//         particle->ay = soa.ay[tid];
+//     }
+// }
+
 __global__ void soa_to_aos(ParticleSOA soa, particle_t* aos, int num_parts) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    int particle_index = soa.particle_indices[tid];
-    particle_t* particle = &aos[particle_index];
     if (tid < num_parts) {
-        particle->x  = soa.x[tid];
-        particle->y  = soa.y[tid];
-        particle->vx = soa.vx[tid];
-        particle->vy = soa.vy[tid];
-        particle->ax = soa.ax[tid];
-        particle->ay = soa.ay[tid];
+        // Use reversed mapping: write to original positions in AOS
+        int particle_index = soa.particle_indices[tid];
+        
+        // These reads are coalesced (good)
+        double x = soa.x[tid];
+        double y = soa.y[tid];
+        double vx = soa.vx[tid];
+        double vy = soa.vy[tid];
+        double ax = soa.ax[tid];
+        double ay = soa.ay[tid];
+        
+        // Write to the appropriate location in AOS (scattered writes)
+        aos[particle_index].x = x;
+        aos[particle_index].y = y;
+        aos[particle_index].vx = vx;
+        aos[particle_index].vy = vy;
+        aos[particle_index].ax = ax;
+        aos[particle_index].ay = ay;
     }
 }
 
@@ -143,55 +168,6 @@ __device__ int ALL_ADJ[9][2] = {
     {-1, -1}, {-1, 0}, {-1, 1}, 
     {0 , -1}, {0 , 0}, {0 , 1},                            
     {1 , -1}, {1 , 0}, {1 , 1},  };
-
-// /**
-//  * Compute forces, using the bins provided
-//  */
-// __global__ void compute_forces_bins(particle_t* particles, int* particle_indices, int* bin_counts,
-//                                     int* prefix_sum, int num_parts, int num_bins_along_axis) {
-//     // Get thread (particle) ID
-//     int tid = threadIdx.x + blockIdx.x * blockDim.x;
-//     if (tid >= num_parts) return;
-    
-//     int particle_id = particle_indices[tid]; // Fetching it into registers first for better coalescing
-//     particle_t* particle = &particles[particle_id]; // TODO: This is random access for now, pending sorting this with SOA
-    
-//     int cur_bin_r = particle->y / CELL_SIZE; // TODO: Some Hack     int cur_bin_r = __double2int_rz(particle->y / CELL_SIZE);  // Faster integer conversion
-//     int cur_bin_c = particle->x / CELL_SIZE;
-
-//     // zero out acceleration
-//     particle->ax = particle->ay = 0;
-
-//     // Iterate through all neighboring bins
-//     for (int adj_idx = 0; adj_idx < 9; ++adj_idx) {
-//         int adj_grid_r = cur_bin_r + ALL_ADJ[adj_idx][0];
-//         int adj_grid_c = cur_bin_c + ALL_ADJ[adj_idx][1];
-
-//         // check bounds
-//         if (adj_grid_r < 0 || adj_grid_r >= num_bins_along_axis || adj_grid_c < 0 ||
-//             adj_grid_c >= num_bins_along_axis) {
-//             continue;
-//         }
-
-//         // get the index of the adjacent bin
-//         int adj_grid_id = adj_grid_r * num_bins_along_axis + adj_grid_c;
-//         int bin_offset = prefix_sum[adj_grid_id];
-//         int bin_size = bin_counts[adj_grid_id];
-
-//         // if (bin_size == 0) { // Remove for cuda kernel cycle optimization
-//         //     // nothing to iterate
-//         //     continue;
-//         // }
-        
-//         int end_idx = bin_offset + bin_size; // Put it in registers first
-
-//         // iterate through all particles in the bin to compute forces
-//         for (int bin_particle_idx = bin_offset; bin_particle_idx < end_idx; ++bin_particle_idx) {
-//             int neighbor_id = particle_indices[bin_particle_idx];
-//             apply_force_gpu(*particle, particles[neighbor_id]);
-//         }
-//     }
-// }
 
 __global__ void compute_forces_bins_soa(ParticleSOA soa, int* bin_counts, int* prefix_sum, int num_parts, int num_bins_along_axis) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
@@ -319,18 +295,6 @@ __global__ void move_gpu_soa(ParticleSOA soa, int num_parts, double size, int nu
     int bin_id = bin_row * num_bins_along_axis + bin_col;
     soa.bin_ids[tid] = bin_id;
 }
-
-// __global__ void init_particle_bins(particle_t* parts, int* particle_bin_ids, int num_parts, int num_bins_along_axis){
-//     int tid = threadIdx.x + blockIdx.x * blockDim.x;
-//     if (tid >= num_parts) return;
-
-//     particle_t* cur_particle = &parts[tid];
-//     int bin_row = cur_particle->y / CELL_SIZE;
-//     int bin_col = cur_particle->x / CELL_SIZE;
-//     int bin_id = bin_row * num_bins_along_axis + bin_col;
-
-//     particle_bin_ids[tid] = bin_id;
-// }
 
 __global__ void init_particle_bins_soa(ParticleSOA soa, int num_parts, int num_bins_along_axis){
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
@@ -490,12 +454,45 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
     thrust::device_ptr<int> device_particle_bin_ids(soa.bin_ids);
     thrust::device_ptr<int> device_particle_indices(soa.particle_indices);
     
-    // TODO: Do we really need the device_particle_bin_ids to be sorted? because it is only used as keys once.
-    auto zip_begin = thrust::make_zip_iterator(thrust::make_tuple(d_x, d_y, d_vx, d_vy, d_ax, d_ay, device_particle_indices));
+    // Create a permutation array
+    thrust::device_vector<int> permutation(num_parts);
+    thrust::sequence(permutation.begin(), permutation.end());
 
-    // Sort the Particle ID Array
-    // https://nvidia.github.io/cccl/thrust/api/function_group__sorting_1ga7a399a3801f1684d465f4adbac462982.html
-    thrust::sort_by_key(thrust::device, device_particle_bin_ids, device_particle_bin_ids + num_parts, zip_begin);
+    // Sort the permutation array based on bin_ids
+    thrust::sort_by_key(thrust::device, device_particle_bin_ids, device_particle_bin_ids + num_parts, permutation.begin());
+
+    // Allocate temporary arrays (only need one for doubles, one for ints)
+    thrust::device_vector<double> temp_double(num_parts);
+    thrust::device_vector<int> temp_int(num_parts);
+
+    // Apply the permutation to each array separately
+    // For x
+    thrust::gather(thrust::device, permutation.begin(), permutation.end(), d_x, temp_double.begin());
+    thrust::copy(thrust::device, temp_double.begin(), temp_double.end(), d_x);
+
+    // For y
+    thrust::gather(thrust::device, permutation.begin(), permutation.end(), d_y, temp_double.begin());
+    thrust::copy(thrust::device, temp_double.begin(), temp_double.end(), d_y);
+
+    // For vx
+    thrust::gather(thrust::device, permutation.begin(), permutation.end(), d_vx, temp_double.begin());
+    thrust::copy(thrust::device, temp_double.begin(), temp_double.end(), d_vx);
+
+    // For vy
+    thrust::gather(thrust::device, permutation.begin(), permutation.end(), d_vy, temp_double.begin());
+    thrust::copy(thrust::device, temp_double.begin(), temp_double.end(), d_vy);
+
+    // For ax
+    thrust::gather(thrust::device, permutation.begin(), permutation.end(), d_ax, temp_double.begin());
+    thrust::copy(thrust::device, temp_double.begin(), temp_double.end(), d_ax);
+
+    // For ay
+    thrust::gather(thrust::device, permutation.begin(), permutation.end(), d_ay, temp_double.begin());
+    thrust::copy(thrust::device, temp_double.begin(), temp_double.end(), d_ay);
+
+    // For particle_indices
+    thrust::gather(thrust::device, permutation.begin(), permutation.end(), device_particle_indices, temp_int.begin());
+    thrust::copy(thrust::device, temp_int.begin(), temp_int.end(), device_particle_indices);
 
 #ifdef ENABLE_TIMERS
     cudaDeviceSynchronize();
