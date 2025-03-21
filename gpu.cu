@@ -12,8 +12,8 @@
 #ifndef NUMBER_THREADS
 #define NUMBER_THREADS   256
 #endif
-#define MULTIPLIER    1
-#define CELL_SIZE     (MULTIPLIER * cutoff)
+// #define MULTIPLIER    1
+// #define CELL_SIZE     (MULTIPLIER * cutoff)
 #ifdef ENABLE_TIMERS
 double compute_force_time = 0;
 double move_gpu_time = 0;
@@ -45,20 +45,7 @@ int* cpu_prefix_sum;
 
 // Particle Indices Array
 double *x_temp, *y_temp, *vx_temp, *vy_temp, *ax_temp, *ay_temp;
-int *indices_temp, *bin_counters;
-
-/**
- * CUDA Kernel to count the number of particles in each bin. SOA style
- */
-__global__ void count_particles_in_bins_soa(ParticleSOA soa, int* bin_counts, int num_parts) {
-    int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    if (tid >= num_parts) return; // If the thread exceeds the number of particles, return
-
-    // Then in count_particles_in_bins_soa, reuse it
-    int bin_id = soa.bin_ids[tid];
-    atomicAdd(&bin_counts[bin_id], 1);
-}
-
+int *indices_temp;
 
 /**
  * CUDA Kernel to convert the Array of Structs into struct of arrays
@@ -160,7 +147,7 @@ __device__ void apply_force_gpu(particle_t& particle, particle_t& neighbor) {
 }
 
 // list of adjacencies
-__device__ int ALL_ADJ[9][2] = {
+__constant__ int ALL_ADJ[9][2] = {
     {-1, -1}, {-1, 0}, {-1, 1}, 
     {0 , -1}, {0 , 0}, {0 , 1},                            
     {1 , -1}, {1 , 0}, {1 , 1},  };
@@ -171,8 +158,8 @@ __global__ void compute_forces_bins_soa(ParticleSOA soa, int* bin_counts, int* p
     
     double x = soa.x[tid]; 
     double y = soa.y[tid];
-    int cur_bin_r = y / CELL_SIZE;
-    int cur_bin_c = x / CELL_SIZE;
+    int cur_bin_r = y / cutoff;
+    int cur_bin_c = x / cutoff;
 
     // Zero out acceleration
     soa.ax[tid] = soa.ay[tid] = 0;
@@ -252,8 +239,8 @@ __global__ void move_gpu_soa(ParticleSOA soa, int num_parts, double size, int nu
     }
 
     // update bin ID
-    int bin_row = *y / CELL_SIZE;
-    int bin_col = *x / CELL_SIZE;
+    int bin_row = *y / cutoff;
+    int bin_col = *x / cutoff;
     int bin_id = bin_row * num_bins_along_axis + bin_col;
     soa.bin_ids[tid] = bin_id;
 
@@ -267,8 +254,8 @@ __global__ void init_particle_bins_soa(ParticleSOA soa, int num_parts, int num_b
 
     double x = soa.x[tid];    // Fetch first for memory coalescing
     double y = soa.y[tid];
-    int bin_row = y / CELL_SIZE;
-    int bin_col = x / CELL_SIZE;
+    int bin_row = y / cutoff;
+    int bin_col = x / cutoff;
     int bin_id = bin_row * num_bins_along_axis + bin_col;
     soa.bin_ids[tid] = bin_id; // Coalesced writing
 
@@ -286,7 +273,7 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
     blks = (num_parts + NUMBER_THREADS - 1) / NUMBER_THREADS;
 
     // dimensions for neighbor checks
-    int num_bins_along_axis = size / (CELL_SIZE) + 1;
+    int num_bins_along_axis = size / (cutoff) + 1;
     int num_bins = num_bins_along_axis * num_bins_along_axis;
 
     // Initialize the Arrays
@@ -294,7 +281,6 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
     cudaMalloc(&cpu_prefix_sum,  num_bins * sizeof(int));
 
     // Initialize SOA
-    // cudaMalloc(&soa_gpu, sizeof(ParticleSOA)); // Don't need because SOA is in host
     cudaMalloc(&soa.x,  num_parts * sizeof(double));
     cudaMalloc(&soa.y,  num_parts * sizeof(double));
     cudaMalloc(&soa.vx, num_parts * sizeof(double));
@@ -317,18 +303,12 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
 
     // std::cout << "done malloc" << std::endl;
 
-    // Count the number of particles in each bin
-    // count_particles_in_bins_soa<<<blks, NUMBER_THREADS>>>(soa, cpu_bin_counts, num_parts);
-
-    // std::cout << "done init bin counts array" << std::endl;
-
     // Do a Prefix Sum to get the starting indices prefix_sum
     auto device_bin_counts = thrust::device_pointer_cast(cpu_bin_counts);
     auto device_prefix_sum = thrust::device_pointer_cast(cpu_prefix_sum);
     thrust::exclusive_scan(thrust::device, device_bin_counts, device_bin_counts + num_bins, device_prefix_sum);
 
     // Reorganization
-
     // Initializing temporary storage for reordering
     cudaMalloc(&x_temp, num_parts * sizeof(double));
     cudaMalloc(&y_temp, num_parts * sizeof(double));
@@ -337,16 +317,15 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
     cudaMalloc(&ax_temp, num_parts * sizeof(double));
     cudaMalloc(&ay_temp, num_parts * sizeof(double));
     cudaMalloc(&indices_temp, num_parts * sizeof(int));
-    cudaMalloc(&bin_counters, num_bins * sizeof(int));
 
     // Reset bin counters to zero
-    cudaMemset(bin_counters, 0, num_bins * sizeof(int));
+    cudaMemset(cpu_bin_counts, 0, num_bins * sizeof(int));
     
     // Perform the bin bucketing
     bin_bucketing_kernel<<<blks, NUMBER_THREADS>>>(
         soa,
         x_temp, y_temp, vx_temp, vy_temp, ax_temp, ay_temp, indices_temp,
-        cpu_prefix_sum, bin_counters, num_parts
+        cpu_prefix_sum, cpu_bin_counts, num_parts
     );
     
     // Copy the reordered data back to the original arrays
@@ -369,7 +348,7 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
 #endif
 
     // dimensions for neighbor checks
-    int num_bins_along_axis = size / (CELL_SIZE) + 1;
+    int num_bins_along_axis = size / (cutoff) + 1;
     int num_bins = num_bins_along_axis * num_bins_along_axis;
 
 #ifdef ENABLE_TIMERS
@@ -403,10 +382,6 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
     start = std::chrono::steady_clock::now();
 #endif
 
-    // Update the bin_count array
-    // count_particles_in_bins_soa<<<blks, NUMBER_THREADS>>>(soa, cpu_bin_counts, num_parts);
-    // std::cout << "done count particles in bins" << std::endl;
-
 #ifdef ENABLE_TIMERS
     cudaDeviceSynchronize();
     end = std::chrono::steady_clock::now();
@@ -428,13 +403,13 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
 #endif
 
     // Reset bin counters to zero
-    cudaMemset(bin_counters, 0, num_bins * sizeof(int));
+    cudaMemset(cpu_bin_counts, 0, num_bins * sizeof(int));
     
     // Perform the bin bucketing
     bin_bucketing_kernel<<<blks, NUMBER_THREADS>>>(
         soa,
         x_temp, y_temp, vx_temp, vy_temp, ax_temp, ay_temp, indices_temp,
-        cpu_prefix_sum, bin_counters, num_parts
+        cpu_prefix_sum, cpu_bin_counts, num_parts
     );
     
     // Copy the reordered data back to the original arrays
