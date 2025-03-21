@@ -12,12 +12,13 @@ sns.set_theme()
 # TIMER_DATA_IN = "./update_particles.2.timers.txt"
 # TIMER_DATA_OUT = "./update_particles.2.timers.csv"
 
-DATA_IN = "./shared_mem_force_apply.txt"
-DATA_OUT = "./shared_mem_force_apply.csv"
-TIMER_DATA_IN = "./shared_mem_force_apply.timers.txt"
-TIMER_DATA_OUT = "./shared_mem_force_apply.timers.csv"
+DATA_IN = "./shared_mem_force_apply.2.txt"
+DATA_OUT = "./shared_mem_force_apply.2.csv"
+TIMER_DATA_IN = "./shared_mem_force_apply.2.timers.txt"
+TIMER_DATA_OUT = "./shared_mem_force_apply.2.timers.csv"
 STARTER_DATA_IN = "./starter.txt"
 STARTER_DATA_OUT = "./starter.csv"
+
 
 def parse_starter_data():
     with open(STARTER_DATA_IN, "r", encoding="utf-8") as f:
@@ -62,6 +63,7 @@ def parse_starter_data():
     plt.yscale("log")
     sns.lineplot(x=arr[:, 0], y=arr[:, 1])
     plt.show()
+
 
 def parse_data():
     with open(DATA_IN, "r", encoding="utf-8") as f:
@@ -133,14 +135,21 @@ def parse_timer_data():
 
         if "Compute forces" in line:
             cur_breakdown["compute_forces"] = extract_float(line)
-        if "Move GPU" in line:
-            cur_breakdown["move_gpu"] = extract_float(line)
-        if "Count particles in bins" in line:
-            cur_breakdown["count_particles"] = extract_float(line)
+        # if "Move GPU" in line:
+        #     cur_breakdown["move_gpu"] = extract_float(line)
+        if "Move and count particles" in line:
+            cur_breakdown["move_count"] = extract_float(line)
+        # if "Count particles in bins" in line:
+        #     cur_breakdown["count_particles"] = extract_float(line)
         if "Exclusive scan" in line:
             cur_breakdown["exclusive_scan"] = extract_float(line)
-        if "Sort" in line:
-            cur_breakdown["sort"] = extract_float(line)
+        if "Bin bucketing" in line:
+            cur_breakdown["bin_bucketing"] = extract_float(line)
+        # if "Sort" in line:
+        #     cur_breakdown["sort"] = extract_float(line)
+        if "Repacking" in line:
+            cur_breakdown["repacking"] = extract_float(line)
+
         if "Simulation Time" in line:
             match = re.search(
                 r"Simulation Time = ([\.\d]+) seconds for (\d+) particles", line
@@ -167,10 +176,13 @@ def parse_timer_data():
     fieldnames = [
         "num_particles",
         "compute_forces",
-        "move_gpu",
-        "count_particles",
+        "move_count",
+        # "move_gpu",
+        # "count_particles",
         "exclusive_scan",
-        "sort",
+        # "sort",
+        "bin_bucketing",
+        "repacking",
     ]
 
     with open(TIMER_DATA_OUT, "w", encoding="utf-8") as f:
