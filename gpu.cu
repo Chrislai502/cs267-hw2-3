@@ -50,46 +50,18 @@ int* cpu_bin_counts;
 int* cpu_prefix_sum;
 
 // Particle Indices Array
-// int* particle_indices; // Sort this
-// int* particle_bin_ids; // based on this using thrust
 double *x_temp, *y_temp, *vx_temp, *vy_temp, *ax_temp, *ay_temp;
 int *indices_temp, *bin_counters;
-
-
-// /**
-//  * CUDA Kernel to count the number of particles in each bin.
-//  *
-//  * Only modifies `bin_counts`, and does not update the `bin_id` in `particle_info`.
-//  */
-// __global__ void count_particles_in_bins(particle_t * particles, int* bin_counts,
-//                                         int num_parts, int num_bins_along_axis) {
-//     int tid = threadIdx.x + blockIdx.x * blockDim.x;
-//     if (tid >= num_parts) return; // If the thread exceeds the number of particles, return
-
-//     particle_t* cur_particle = &particles[tid];
-
-//     // Calculate the bin ID based on the particle's current position
-//     int grid_x = cur_particle->x / CELL_SIZE;
-//     int grid_y = cur_particle->y / CELL_SIZE;
-//     int bin_id = grid_y * num_bins_along_axis + grid_x;
-
-//     // Updating the bin_counts array
-//     atomicAdd(&bin_counts[bin_id], 1);
-// }
 
 /**
  * CUDA Kernel to count the number of particles in each bin. SOA style
  */
-__global__ void count_particles_in_bins_soa(ParticleSOA soa, int* bin_counts, int num_parts, int num_bins_along_axis) {
+__global__ void count_particles_in_bins_soa(ParticleSOA soa, int* bin_counts, int num_parts) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     if (tid >= num_parts) return; // If the thread exceeds the number of particles, return
 
-    double x = soa.x[tid];    // Fetch first for memory coalescing
-    double y = soa.y[tid]; 
-    int grid_x = x / CELL_SIZE;
-    int grid_y = y / CELL_SIZE;
-    int bin_id = grid_y * num_bins_along_axis + grid_x;
-
+    // Then in count_particles_in_bins_soa, reuse it
+    int bin_id = soa.bin_ids[tid];
     atomicAdd(&bin_counts[bin_id], 1);
 }
 
@@ -380,7 +352,7 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
 
     // Count the number of particles in each bin
     cudaMemset(cpu_bin_counts, 0, num_bins * sizeof(int));
-    count_particles_in_bins_soa<<<blks, NUMBER_THREADS>>>(soa, cpu_bin_counts, num_parts, num_bins_along_axis);
+    count_particles_in_bins_soa<<<blks, NUMBER_THREADS>>>(soa, cpu_bin_counts, num_parts);
 
     // std::cout << "done init bin counts array" << std::endl;
 
@@ -415,7 +387,6 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
     cudaMalloc(&ay_temp, num_parts * sizeof(double));
     cudaMalloc(&indices_temp, num_parts * sizeof(int));
     cudaMalloc(&bin_counters, num_bins * sizeof(int));
-
 }
 
 void simulate_one_step(particle_t* parts, int num_parts, double size) {
@@ -450,6 +421,8 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
 #endif
 
     // Move particles (Modified to also update the bin_ids upon moving)
+    // Also include counting now
+    cudaMemset(cpu_bin_counts, 0, num_bins * sizeof(int));
     move_gpu_soa<<<blks, NUMBER_THREADS>>>(soa, num_parts, size, num_bins_along_axis);
     // std::cout << "done move particles" << std::endl;
 
@@ -461,8 +434,7 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
 #endif
 
     // Update the bin_count array
-    cudaMemset(cpu_bin_counts, 0, num_bins * sizeof(int));
-    count_particles_in_bins_soa<<<blks, NUMBER_THREADS>>>(soa, cpu_bin_counts, num_parts, num_bins_along_axis);
+    count_particles_in_bins_soa<<<blks, NUMBER_THREADS>>>(soa, cpu_bin_counts, num_parts);
     // std::cout << "done count particles in bins" << std::endl;
 
 #ifdef ENABLE_TIMERS
