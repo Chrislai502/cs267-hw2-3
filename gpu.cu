@@ -25,12 +25,6 @@ double total_compute_time = 0;
 
 // Put any static global variables here that you will use throughout the simulation.
 int blks;
-
-// typedef struct particle_info_t {
-//     particle_t* particle;
-//     int bin_id;
-// } particle_info_t;
-
 struct ParticleSOA {
     double* x;
     double* y;
@@ -227,41 +221,7 @@ __global__ void compute_forces_bins_soa(ParticleSOA soa, int* bin_counts, int* p
     }
 }
 
-__global__ void move_gpu(particle_t* particles, int * particle_indices, int* particle_bin_ids, int num_parts, double size,
-                         int num_bins_along_axis) {
-
-    // Get thread (particle) ID
-    int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    if (tid >= num_parts) return;
-
-    int particle_id = particle_indices[tid]; // Fetching it into registers first for better coalescing (after SOA)
-    particle_t* p = &particles[particle_id];
-
-    //  slightly simplified Velocity Verlet integration
-    //  conserves energy better than explicit Euler method
-    p->vx += p->ax * dt;
-    p->vy += p->ay * dt;
-    p->x += p->vx * dt;
-    p->y += p->vy * dt;
-
-    //  bounce from walls
-    while (p->x < 0 || p->x > size) {
-        p->x = p->x < 0 ? -(p->x) : 2 * size - p->x;
-        p->vx = -(p->vx);
-    }
-    while (p->y < 0 || p->y > size) {
-        p->y = p->y < 0 ? -(p->y) : 2 * size - p->y;
-        p->vy = -(p->vy);
-    }
-
-    // update bin ID
-    int bin_row = p->y / CELL_SIZE;
-    int bin_col = p->x / CELL_SIZE;
-    int bin_id = bin_row * num_bins_along_axis + bin_col;
-    particle_bin_ids[tid] = bin_id;
-}
-
-__global__ void move_gpu_soa(ParticleSOA soa, int num_parts, double size, int num_bins_along_axis) {
+__global__ void move_gpu_soa(ParticleSOA soa, int num_parts, double size, int num_bins_along_axis, int* bin_counts) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     if (tid >= num_parts) return;
 
@@ -296,9 +256,12 @@ __global__ void move_gpu_soa(ParticleSOA soa, int num_parts, double size, int nu
     int bin_col = *x / CELL_SIZE;
     int bin_id = bin_row * num_bins_along_axis + bin_col;
     soa.bin_ids[tid] = bin_id;
+
+    // Count the number of particles in each bin
+    atomicAdd(&bin_counts[bin_id], 1);
 }
 
-__global__ void init_particle_bins_soa(ParticleSOA soa, int num_parts, int num_bins_along_axis){
+__global__ void init_particle_bins_soa(ParticleSOA soa, int num_parts, int num_bins_along_axis, int* bin_counts) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     if (tid >= num_parts) return;
 
@@ -308,6 +271,9 @@ __global__ void init_particle_bins_soa(ParticleSOA soa, int num_parts, int num_b
     int bin_col = x / CELL_SIZE;
     int bin_id = bin_row * num_bins_along_axis + bin_col;
     soa.bin_ids[tid] = bin_id; // Coalesced writing
+
+    // Count the number of particles in each bin
+    atomicAdd(&bin_counts[bin_id], 1);
 }
 
 void init_simulation(particle_t* parts, int num_parts, double size) {
@@ -346,13 +312,13 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
     aos_to_soa<<<blks, NUMBER_THREADS>>>(parts, soa, num_parts);
 
     // Initialize the Particle Bin IDs array
-    init_particle_bins_soa<<<blks, NUMBER_THREADS>>>(soa, num_parts, num_bins_along_axis);
+    cudaMemset(cpu_bin_counts, 0, num_bins * sizeof(int));
+    init_particle_bins_soa<<<blks, NUMBER_THREADS>>>(soa, num_parts, num_bins_along_axis, cpu_bin_counts);
 
     // std::cout << "done malloc" << std::endl;
 
     // Count the number of particles in each bin
-    cudaMemset(cpu_bin_counts, 0, num_bins * sizeof(int));
-    count_particles_in_bins_soa<<<blks, NUMBER_THREADS>>>(soa, cpu_bin_counts, num_parts);
+    // count_particles_in_bins_soa<<<blks, NUMBER_THREADS>>>(soa, cpu_bin_counts, num_parts);
 
     // std::cout << "done init bin counts array" << std::endl;
 
@@ -361,22 +327,7 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
     auto device_prefix_sum = thrust::device_pointer_cast(cpu_prefix_sum);
     thrust::exclusive_scan(thrust::device, device_bin_counts, device_bin_counts + num_bins, device_prefix_sum);
 
-    // Zip everything together
-    thrust::device_ptr<double> d_x(soa.x);
-    thrust::device_ptr<double> d_y(soa.y);
-    thrust::device_ptr<double> d_vx(soa.vx);
-    thrust::device_ptr<double> d_vy(soa.vy);
-    thrust::device_ptr<double> d_ax(soa.ax);
-    thrust::device_ptr<double> d_ay(soa.ay);
-    thrust::device_ptr<int> device_particle_bin_ids(soa.bin_ids);
-    thrust::device_ptr<int> device_particle_indices(soa.particle_indices);
-    
-    // std::cout << "done init exclusive scan" << std::endl;
-
-    // TODO: Do we really need the device_particle_bin_ids to be sorted? because it is only used as keys once.
-    auto zip_begin = thrust::make_zip_iterator(thrust::make_tuple(d_x, d_y, d_vx, d_vy, d_ax, d_ay, device_particle_indices));
-    thrust::sort_by_key(thrust::device, device_particle_bin_ids, device_particle_bin_ids + num_parts, zip_begin);
-    // std::cout << "done init prefix sum" << std::endl;
+    // Reorganization
 
     // Initializing temporary storage for reordering
     cudaMalloc(&x_temp, num_parts * sizeof(double));
@@ -387,6 +338,25 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
     cudaMalloc(&ay_temp, num_parts * sizeof(double));
     cudaMalloc(&indices_temp, num_parts * sizeof(int));
     cudaMalloc(&bin_counters, num_bins * sizeof(int));
+
+    // Reset bin counters to zero
+    cudaMemset(bin_counters, 0, num_bins * sizeof(int));
+    
+    // Perform the bin bucketing
+    bin_bucketing_kernel<<<blks, NUMBER_THREADS>>>(
+        soa,
+        x_temp, y_temp, vx_temp, vy_temp, ax_temp, ay_temp, indices_temp,
+        cpu_prefix_sum, bin_counters, num_parts
+    );
+    
+    // Copy the reordered data back to the original arrays
+    cudaMemcpy(soa.x, x_temp, num_parts * sizeof(double), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(soa.y, y_temp, num_parts * sizeof(double), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(soa.vx, vx_temp, num_parts * sizeof(double), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(soa.vy, vy_temp, num_parts * sizeof(double), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(soa.ax, ax_temp, num_parts * sizeof(double), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(soa.ay, ay_temp, num_parts * sizeof(double), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(soa.particle_indices, indices_temp, num_parts * sizeof(int), cudaMemcpyDeviceToDevice);
 }
 
 void simulate_one_step(particle_t* parts, int num_parts, double size) {
@@ -423,7 +393,7 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
     // Move particles (Modified to also update the bin_ids upon moving)
     // Also include counting now
     cudaMemset(cpu_bin_counts, 0, num_bins * sizeof(int));
-    move_gpu_soa<<<blks, NUMBER_THREADS>>>(soa, num_parts, size, num_bins_along_axis);
+    move_gpu_soa<<<blks, NUMBER_THREADS>>>(soa, num_parts, size, num_bins_along_axis, cpu_bin_counts);
     // std::cout << "done move particles" << std::endl;
 
 #ifdef ENABLE_TIMERS
@@ -434,7 +404,7 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
 #endif
 
     // Update the bin_count array
-    count_particles_in_bins_soa<<<blks, NUMBER_THREADS>>>(soa, cpu_bin_counts, num_parts);
+    // count_particles_in_bins_soa<<<blks, NUMBER_THREADS>>>(soa, cpu_bin_counts, num_parts);
     // std::cout << "done count particles in bins" << std::endl;
 
 #ifdef ENABLE_TIMERS
