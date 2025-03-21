@@ -28,9 +28,9 @@ void simulate_one_step(particle_t* parts, int num_parts, double size);
 
 #ifdef ENABLE_TIMERS
 extern double compute_force_time;
-extern double move_gpu_time;
-extern double count_particles_in_bins_time;
+extern double move_particles_and_count_time;
 extern double exclusive_scan_time;
-extern double sort_time;
+extern double bin_bucketing_time;
+extern double repacking_time;
 extern double total_compute_time;
 #endif
