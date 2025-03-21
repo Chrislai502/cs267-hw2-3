@@ -48,6 +48,8 @@ ParticleSOA soa;
 int* cpu_bin_counts;
 // starting index for each bin, as a prefix sum of `bin_counts`
 int* cpu_prefix_sum;
+
+int* bin_counters;
 // Particle Indices Array
 // int* particle_indices; // Sort this
 // int* particle_bin_ids; // based on this using thrust
@@ -107,20 +109,6 @@ __global__ void aos_to_soa(const particle_t* aos, ParticleSOA soa, int num_parts
     }    
 }
 
-// __global__ void soa_to_aos(ParticleSOA soa, particle_t* aos, int num_parts) {
-//     int tid = threadIdx.x + blockIdx.x * blockDim.x;
-//     int particle_index = soa.particle_indices[tid];
-//     particle_t* particle = &aos[particle_index];
-//     if (tid < num_parts) {
-//         particle->x  = soa.x[tid];
-//         particle->y  = soa.y[tid];
-//         particle->vx = soa.vx[tid];
-//         particle->vy = soa.vy[tid];
-//         particle->ax = soa.ax[tid];
-//         particle->ay = soa.ay[tid];
-//     }
-// }
-
 __global__ void soa_to_aos(ParticleSOA soa, particle_t* aos, int num_parts) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     if (tid < num_parts) {
@@ -144,6 +132,48 @@ __global__ void soa_to_aos(ParticleSOA soa, particle_t* aos, int num_parts) {
         aos[particle_index].ay = ay;
     }
 }
+
+__global__ void bin_bucketing_kernel(
+    // Source data (current SOA)
+    ParticleSOA soa,
+    // Destination data (temporary storage)
+    double* x_dst, double* y_dst, double* vx_dst, double* vy_dst, 
+    double* ax_dst, double* ay_dst, int* indices_dst,
+    // Bin information
+    int* bin_offsets,   // prefix sum array with starting positions
+    int* bin_counters,  // temporary counters for each bin
+    int num_parts
+) {
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    if (tid >= num_parts) return;
+    
+    // Get the bin id for this particle
+    int bin_id = soa.bin_ids[tid];
+    
+    // Calculate destination position using atomic add
+    // This ensures each thread gets a unique position within its bin
+    int bin_pos = atomicAdd(&bin_counters[bin_id], 1);
+    int dst_idx = bin_offsets[bin_id] + bin_pos;
+    
+    // Copy data to the destination arrays - these reads and writes are coalesced
+    double x = soa.x[tid];
+    double y = soa.y[tid];
+    double vx = soa.vx[tid];
+    double vy = soa.vy[tid];
+    double ax = soa.ax[tid];
+    double ay = soa.ay[tid];
+
+    // Write data to the destination arrays
+    x_dst[dst_idx] = x;
+    y_dst[dst_idx] = y;
+    vx_dst[dst_idx] = vx;
+    vy_dst[dst_idx] = vy;
+    ax_dst[dst_idx] = ax;
+    ay_dst[dst_idx] = ay;
+
+    indices_dst[dst_idx] = soa.particle_indices[tid];
+}
+
 
 __device__ void apply_force_gpu(particle_t& particle, particle_t& neighbor) {
     double dx = neighbor.x - particle.x;
@@ -454,45 +484,48 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
     thrust::device_ptr<int> device_particle_bin_ids(soa.bin_ids);
     thrust::device_ptr<int> device_particle_indices(soa.particle_indices);
     
-    // Create a permutation array
-    thrust::device_vector<int> permutation(num_parts);
-    thrust::sequence(permutation.begin(), permutation.end());
+    // Allocate temporary storage for reordering
+    double *x_temp, *y_temp, *vx_temp, *vy_temp, *ax_temp, *ay_temp;
+    int *indices_temp, *bin_counters;
+    
+    cudaMalloc(&x_temp, num_parts * sizeof(double));
+    cudaMalloc(&y_temp, num_parts * sizeof(double));
+    cudaMalloc(&vx_temp, num_parts * sizeof(double));
+    cudaMalloc(&vy_temp, num_parts * sizeof(double));
+    cudaMalloc(&ax_temp, num_parts * sizeof(double));
+    cudaMalloc(&ay_temp, num_parts * sizeof(double));
+    cudaMalloc(&indices_temp, num_parts * sizeof(int));
+    cudaMalloc(&bin_counters, num_bins * sizeof(int));
+    
+    // Reset bin counters to zero
+    cudaMemset(bin_counters, 0, num_bins * sizeof(int));
+    
+    // Perform the bin bucketing
+    bin_bucketing_kernel<<<blks, NUMBER_THREADS>>>(
+        soa,
+        x_temp, y_temp, vx_temp, vy_temp, ax_temp, ay_temp, indices_temp,
+        cpu_prefix_sum, bin_counters, num_parts
+    );
+    
+    // Copy the reordered data back to the original arrays
+    cudaMemcpy(soa.x, x_temp, num_parts * sizeof(double), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(soa.y, y_temp, num_parts * sizeof(double), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(soa.vx, vx_temp, num_parts * sizeof(double), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(soa.vy, vy_temp, num_parts * sizeof(double), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(soa.ax, ax_temp, num_parts * sizeof(double), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(soa.ay, ay_temp, num_parts * sizeof(double), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(soa.particle_indices, indices_temp, num_parts * sizeof(int), cudaMemcpyDeviceToDevice);
+    
+    // Clean up temporary storage
+    cudaFree(x_temp);
+    cudaFree(y_temp);
+    cudaFree(vx_temp);
+    cudaFree(vy_temp);
+    cudaFree(ax_temp);
+    cudaFree(ay_temp);
+    cudaFree(indices_temp);
+    cudaFree(bin_counters);
 
-    // Sort the permutation array based on bin_ids
-    thrust::sort_by_key(thrust::device, device_particle_bin_ids, device_particle_bin_ids + num_parts, permutation.begin());
-
-    // Allocate temporary arrays (only need one for doubles, one for ints)
-    thrust::device_vector<double> temp_double(num_parts);
-    thrust::device_vector<int> temp_int(num_parts);
-
-    // Apply the permutation to each array separately
-    // For x
-    thrust::gather(thrust::device, permutation.begin(), permutation.end(), d_x, temp_double.begin());
-    thrust::copy(thrust::device, temp_double.begin(), temp_double.end(), d_x);
-
-    // For y
-    thrust::gather(thrust::device, permutation.begin(), permutation.end(), d_y, temp_double.begin());
-    thrust::copy(thrust::device, temp_double.begin(), temp_double.end(), d_y);
-
-    // For vx
-    thrust::gather(thrust::device, permutation.begin(), permutation.end(), d_vx, temp_double.begin());
-    thrust::copy(thrust::device, temp_double.begin(), temp_double.end(), d_vx);
-
-    // For vy
-    thrust::gather(thrust::device, permutation.begin(), permutation.end(), d_vy, temp_double.begin());
-    thrust::copy(thrust::device, temp_double.begin(), temp_double.end(), d_vy);
-
-    // For ax
-    thrust::gather(thrust::device, permutation.begin(), permutation.end(), d_ax, temp_double.begin());
-    thrust::copy(thrust::device, temp_double.begin(), temp_double.end(), d_ax);
-
-    // For ay
-    thrust::gather(thrust::device, permutation.begin(), permutation.end(), d_ay, temp_double.begin());
-    thrust::copy(thrust::device, temp_double.begin(), temp_double.end(), d_ay);
-
-    // For particle_indices
-    thrust::gather(thrust::device, permutation.begin(), permutation.end(), device_particle_indices, temp_int.begin());
-    thrust::copy(thrust::device, temp_int.begin(), temp_int.end(), device_particle_indices);
 
 #ifdef ENABLE_TIMERS
     cudaDeviceSynchronize();
