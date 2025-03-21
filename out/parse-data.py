@@ -196,5 +196,8 @@ def parse_timer_data():
 
 if __name__ == "__main__":
     parse_data()
+<<<<<<< HEAD
     parse_starter_data()
+=======
+>>>>>>> shared_mem_force_apply
     parse_timer_data()
