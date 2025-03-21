@@ -38,6 +38,7 @@ struct ParticleSOA {
     double* ax;
     double* ay;
     int* bin_ids;
+    int* particle_indices;
 };
 
 ParticleSOA soa;
@@ -107,13 +108,15 @@ __global__ void aos_to_soa(const particle_t* aos, ParticleSOA soa, int num_parts
 
 __global__ void soa_to_aos(ParticleSOA soa, particle_t* aos, int num_parts) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    int particle_index = soa.particle_indices[tid];
+    particle_t* particle = &aos[particle_index];
     if (tid < num_parts) {
-        aos[tid].x  = soa.x[tid];
-        aos[tid].y  = soa.y[tid];
-        aos[tid].vx = soa.vx[tid];
-        aos[tid].vy = soa.vy[tid];
-        aos[tid].ax = soa.ax[tid];
-        aos[tid].ay = soa.ay[tid];
+        particle->x  = soa.x[tid];
+        particle->y  = soa.y[tid];
+        particle->vx = soa.vx[tid];
+        particle->vy = soa.vy[tid];
+        particle->ax = soa.ax[tid];
+        particle->ay = soa.ay[tid];
     }
 }
 
@@ -367,6 +370,11 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
     cudaMalloc(&soa.ax, num_parts * sizeof(double));
     cudaMalloc(&soa.ay, num_parts * sizeof(double));
     cudaMalloc(&soa.bin_ids, num_parts * sizeof(int));
+    cudaMalloc(&soa.particle_indices, num_parts * sizeof(int));
+
+    // Initilize the particle_indices array
+    thrust::sequence(thrust::device, thrust::device_pointer_cast(soa.particle_indices),
+                        thrust::device_pointer_cast(soa.particle_indices) + num_parts);
 
     // Packing: Convert Array of Structs to Struct of Arrays
     aos_to_soa<<<blks, NUMBER_THREADS>>>(parts, soa, num_parts);
@@ -395,11 +403,12 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
     thrust::device_ptr<double> d_ax(soa.ax);
     thrust::device_ptr<double> d_ay(soa.ay);
     thrust::device_ptr<int> device_particle_bin_ids(soa.bin_ids);
+    thrust::device_ptr<int> device_particle_indices(soa.particle_indices);
     
     // std::cout << "done init exclusive scan" << std::endl;
 
     // TODO: Do we really need the device_particle_bin_ids to be sorted? because it is only used as keys once.
-    auto zip_begin = thrust::make_zip_iterator(thrust::make_tuple(d_x, d_y, d_vx, d_vy, d_ax, d_ay));
+    auto zip_begin = thrust::make_zip_iterator(thrust::make_tuple(d_x, d_y, d_vx, d_vy, d_ax, d_ay, device_particle_indices));
     thrust::sort_by_key(thrust::device, device_particle_bin_ids, device_particle_bin_ids + num_parts, zip_begin);
     // std::cout << "done init prefix sum" << std::endl;
 }
@@ -479,9 +488,10 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
     thrust::device_ptr<double> d_ax(soa.ax);
     thrust::device_ptr<double> d_ay(soa.ay);
     thrust::device_ptr<int> device_particle_bin_ids(soa.bin_ids);
+    thrust::device_ptr<int> device_particle_indices(soa.particle_indices);
     
     // TODO: Do we really need the device_particle_bin_ids to be sorted? because it is only used as keys once.
-    auto zip_begin = thrust::make_zip_iterator(thrust::make_tuple(d_x, d_y, d_vx, d_vy, d_ax, d_ay));
+    auto zip_begin = thrust::make_zip_iterator(thrust::make_tuple(d_x, d_y, d_vx, d_vy, d_ax, d_ay, device_particle_indices));
 
     // Sort the Particle ID Array
     // https://nvidia.github.io/cccl/thrust/api/function_group__sorting_1ga7a399a3801f1684d465f4adbac462982.html
