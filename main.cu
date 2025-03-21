@@ -145,12 +145,12 @@ int main(int argc, char** argv) {
 
 #ifdef ENABLE_TIMERS
     std::cout << "=== Timer Breakdown (in seconds) ===\n";
-    std::cout << "Compute forces:          " << compute_force_time << "\n";
-    std::cout << "Move GPU:                " << move_gpu_time << "\n";
-    std::cout << "Count particles in bins: " << count_particles_in_bins_time << "\n";
-    std::cout << "Exclusive scan:          " << exclusive_scan_time << "\n";
-    std::cout << "Sort:                    " << sort_time << "\n";
-    std::cout << "Total simulation step:   " << total_compute_time << "\n";
+    std::cout << "Compute forces:           " << compute_force_time << "\n";
+    std::cout << "Move and count particles: " << move_particles_and_count_time << "\n";
+    std::cout << "Exclusive scan:           " << exclusive_scan_time << "\n";
+    std::cout << "Bin bucketing:            " << bin_bucketing_time << "\n";
+    std::cout << "Repacking:                " << repacking_time << "\n";
+    std::cout << "Total simulation step:    " << total_compute_time << "\n";
 #endif
 
     // Finalize

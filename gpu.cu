@@ -16,10 +16,10 @@
 // #define CELL_SIZE     (MULTIPLIER * cutoff)
 #ifdef ENABLE_TIMERS
 double compute_force_time = 0;
-double move_gpu_time = 0;
-double count_particles_in_bins_time = 0;
+double move_particles_and_count_time = 0;
 double exclusive_scan_time = 0;
-double sort_time = 0;
+double bin_bucketing_time = 0;
+double repacking_time = 0;
 double total_compute_time = 0;
 #endif
 
@@ -378,14 +378,7 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
 #ifdef ENABLE_TIMERS
     cudaDeviceSynchronize();
     end = std::chrono::steady_clock::now();
-    move_gpu_time += std::chrono::duration<double>(end - start).count();
-    start = std::chrono::steady_clock::now();
-#endif
-
-#ifdef ENABLE_TIMERS
-    cudaDeviceSynchronize();
-    end = std::chrono::steady_clock::now();
-    count_particles_in_bins_time += std::chrono::duration<double>(end - start).count();
+    move_particles_and_count_time += std::chrono::duration<double>(end - start).count();
     start = std::chrono::steady_clock::now();
 #endif
 
@@ -424,11 +417,18 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
 #ifdef ENABLE_TIMERS
     cudaDeviceSynchronize();
     end = std::chrono::steady_clock::now();
-    sort_time += std::chrono::duration<double>(end - start).count();
+    bin_bucketing_time += std::chrono::duration<double>(end - start).count();
+    start = std::chrono::steady_clock::now();
+#endif
+
+    soa_to_aos<<<blks, NUMBER_THREADS>>>(soa, parts, num_parts);
+
+#ifdef ENABLE_TIMERS
+    cudaDeviceSynchronize();
+    end = std::chrono::steady_clock::now();
+    repacking_time += std::chrono::duration<double>(end - start).count();
 
     auto total_end = std::chrono::steady_clock::now();
     total_compute_time += std::chrono::duration<double>(total_end - total_start).count();
 #endif
-
-    soa_to_aos<<<blks, NUMBER_THREADS>>>(soa, parts, num_parts);
 }

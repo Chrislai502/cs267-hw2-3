@@ -12,10 +12,10 @@ sns.set_theme()
 # TIMER_DATA_IN = "./update_particles.2.timers.txt"
 # TIMER_DATA_OUT = "./update_particles.2.timers.csv"
 
-DATA_IN = "./update_particles.3.txt"
-DATA_OUT = "./update_particles.3.csv"
-TIMER_DATA_IN = "./update_particles.3.timers.txt"
-TIMER_DATA_OUT = "./update_particles.3.timers.csv"
+DATA_IN = "./shared_mem_force_apply.txt"
+DATA_OUT = "./shared_mem_force_apply.csv"
+TIMER_DATA_IN = "./shared_mem_force_apply.timers.txt"
+TIMER_DATA_OUT = "./shared_mem_force_apply.timers.csv"
 STARTER_DATA_IN = "./starter.txt"
 STARTER_DATA_OUT = "./starter.csv"
 
@@ -196,8 +196,5 @@ def parse_timer_data():
 
 if __name__ == "__main__":
     parse_data()
-<<<<<<< HEAD
     parse_starter_data()
-=======
->>>>>>> shared_mem_force_apply
     parse_timer_data()
