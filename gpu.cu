@@ -49,11 +49,11 @@ int* cpu_bin_counts;
 // starting index for each bin, as a prefix sum of `bin_counts`
 int* cpu_prefix_sum;
 
-int* bin_counters;
 // Particle Indices Array
 // int* particle_indices; // Sort this
 // int* particle_bin_ids; // based on this using thrust
-
+double *x_temp, *y_temp, *vx_temp, *vy_temp, *ax_temp, *ay_temp;
+int *indices_temp, *bin_counters;
 
 
 // /**
@@ -405,6 +405,17 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
     auto zip_begin = thrust::make_zip_iterator(thrust::make_tuple(d_x, d_y, d_vx, d_vy, d_ax, d_ay, device_particle_indices));
     thrust::sort_by_key(thrust::device, device_particle_bin_ids, device_particle_bin_ids + num_parts, zip_begin);
     // std::cout << "done init prefix sum" << std::endl;
+
+    // Initializing temporary storage for reordering
+    cudaMalloc(&x_temp, num_parts * sizeof(double));
+    cudaMalloc(&y_temp, num_parts * sizeof(double));
+    cudaMalloc(&vx_temp, num_parts * sizeof(double));
+    cudaMalloc(&vy_temp, num_parts * sizeof(double));
+    cudaMalloc(&ax_temp, num_parts * sizeof(double));
+    cudaMalloc(&ay_temp, num_parts * sizeof(double));
+    cudaMalloc(&indices_temp, num_parts * sizeof(int));
+    cudaMalloc(&bin_counters, num_bins * sizeof(int));
+
 }
 
 void simulate_one_step(particle_t* parts, int num_parts, double size) {
@@ -474,29 +485,6 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
     start = std::chrono::steady_clock::now();
 #endif
 
-    // Zip everything together
-    thrust::device_ptr<double> d_x(soa.x);
-    thrust::device_ptr<double> d_y(soa.y);
-    thrust::device_ptr<double> d_vx(soa.vx);
-    thrust::device_ptr<double> d_vy(soa.vy);
-    thrust::device_ptr<double> d_ax(soa.ax);
-    thrust::device_ptr<double> d_ay(soa.ay);
-    thrust::device_ptr<int> device_particle_bin_ids(soa.bin_ids);
-    thrust::device_ptr<int> device_particle_indices(soa.particle_indices);
-    
-    // Allocate temporary storage for reordering
-    double *x_temp, *y_temp, *vx_temp, *vy_temp, *ax_temp, *ay_temp;
-    int *indices_temp, *bin_counters;
-    
-    cudaMalloc(&x_temp, num_parts * sizeof(double));
-    cudaMalloc(&y_temp, num_parts * sizeof(double));
-    cudaMalloc(&vx_temp, num_parts * sizeof(double));
-    cudaMalloc(&vy_temp, num_parts * sizeof(double));
-    cudaMalloc(&ax_temp, num_parts * sizeof(double));
-    cudaMalloc(&ay_temp, num_parts * sizeof(double));
-    cudaMalloc(&indices_temp, num_parts * sizeof(int));
-    cudaMalloc(&bin_counters, num_bins * sizeof(int));
-    
     // Reset bin counters to zero
     cudaMemset(bin_counters, 0, num_bins * sizeof(int));
     
@@ -515,17 +503,6 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
     cudaMemcpy(soa.ax, ax_temp, num_parts * sizeof(double), cudaMemcpyDeviceToDevice);
     cudaMemcpy(soa.ay, ay_temp, num_parts * sizeof(double), cudaMemcpyDeviceToDevice);
     cudaMemcpy(soa.particle_indices, indices_temp, num_parts * sizeof(int), cudaMemcpyDeviceToDevice);
-    
-    // Clean up temporary storage
-    cudaFree(x_temp);
-    cudaFree(y_temp);
-    cudaFree(vx_temp);
-    cudaFree(vy_temp);
-    cudaFree(ax_temp);
-    cudaFree(ay_temp);
-    cudaFree(indices_temp);
-    cudaFree(bin_counters);
-
 
 #ifdef ENABLE_TIMERS
     cudaDeviceSynchronize();
