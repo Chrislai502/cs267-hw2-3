@@ -71,18 +71,10 @@ __global__ void soa_to_aos(ParticleSOA soa, particle_t* aos, int num_parts) {
         // These reads are coalesced (good)
         double x = soa.x[tid];
         double y = soa.y[tid];
-        double vx = soa.vx[tid];
-        double vy = soa.vy[tid];
-        double ax = soa.ax[tid];
-        double ay = soa.ay[tid];
         
         // Write to the appropriate location in AOS (scattered writes)
         aos[particle_index].x = x;
         aos[particle_index].y = y;
-        aos[particle_index].vx = vx;
-        aos[particle_index].vy = vy;
-        aos[particle_index].ax = ax;
-        aos[particle_index].ay = ay;
     }
 }
 
