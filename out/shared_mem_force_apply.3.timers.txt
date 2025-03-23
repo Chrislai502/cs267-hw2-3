@@ -1,0 +1,242 @@
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.0173618
+Move and count particles: 0.0122834
+Exclusive scan:           0.0187034
+Bin bucketing:            0.034456
+Repacking:                0.00874378
+Total simulation step:    0.0927939
+Simulation Time = 0.0956684 seconds for 1000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.0170077
+Move and count particles: 0.012095
+Exclusive scan:           0.018557
+Bin bucketing:            0.0340126
+Repacking:                0.00859868
+Total simulation step:    0.0915007
+Simulation Time = 0.0943088 seconds for 1000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.0161926
+Move and count particles: 0.0116596
+Exclusive scan:           0.0181052
+Bin bucketing:            0.0321569
+Repacking:                0.00836332
+Total simulation step:    0.0877096
+Simulation Time = 0.0917482 seconds for 1000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.0190524
+Move and count particles: 0.0130275
+Exclusive scan:           0.019277
+Bin bucketing:            0.0367489
+Repacking:                0.00931877
+Total simulation step:    0.0987039
+Simulation Time = 0.101607 seconds for 5000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.0170949
+Move and count particles: 0.0119007
+Exclusive scan:           0.0180079
+Bin bucketing:            0.0332772
+Repacking:                0.00859107
+Total simulation step:    0.0900918
+Simulation Time = 0.093622 seconds for 5000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.0171932
+Move and count particles: 0.0118473
+Exclusive scan:           0.0179914
+Bin bucketing:            0.0329876
+Repacking:                0.00861771
+Total simulation step:    0.0898741
+Simulation Time = 0.0943121 seconds for 5000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.0193055
+Move and count particles: 0.0130833
+Exclusive scan:           0.019321
+Bin bucketing:            0.03722
+Repacking:                0.00935884
+Total simulation step:    0.0995398
+Simulation Time = 0.103437 seconds for 10000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.0194956
+Move and count particles: 0.0132323
+Exclusive scan:           0.0196216
+Bin bucketing:            0.0376036
+Repacking:                0.009533
+Total simulation step:    0.100731
+Simulation Time = 0.104554 seconds for 10000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.0175566
+Move and count particles: 0.0120419
+Exclusive scan:           0.0182897
+Bin bucketing:            0.0334699
+Repacking:                0.00872893
+Total simulation step:    0.0913181
+Simulation Time = 0.0943219 seconds for 10000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.0194808
+Move and count particles: 0.013154
+Exclusive scan:           0.0217008
+Bin bucketing:            0.0379101
+Repacking:                0.0107931
+Total simulation step:    0.10425
+Simulation Time = 0.107431 seconds for 50000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.0214698
+Move and count particles: 0.0144856
+Exclusive scan:           0.0232319
+Bin bucketing:            0.0434218
+Repacking:                0.0117123
+Total simulation step:    0.115555
+Simulation Time = 0.130691 seconds for 50000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.0213622
+Move and count particles: 0.0142448
+Exclusive scan:           0.0230998
+Bin bucketing:            0.0425399
+Repacking:                0.0115964
+Total simulation step:    0.114061
+Simulation Time = 0.117256 seconds for 50000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.0253573
+Move and count particles: 0.0163429
+Exclusive scan:           0.0243703
+Bin bucketing:            0.0493864
+Repacking:                0.0148135
+Total simulation step:    0.131499
+Simulation Time = 0.135093 seconds for 100000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.025516
+Move and count particles: 0.0164091
+Exclusive scan:           0.0244085
+Bin bucketing:            0.049531
+Repacking:                0.0148538
+Total simulation step:    0.131961
+Simulation Time = 0.15585 seconds for 100000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.025324
+Move and count particles: 0.0162178
+Exclusive scan:           0.0243249
+Bin bucketing:            0.0482804
+Repacking:                0.0148051
+Total simulation step:    0.130181
+Simulation Time = 0.133782 seconds for 100000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.094178
+Move and count particles: 0.0484411
+Exclusive scan:           0.0325705
+Bin bucketing:            0.157501
+Repacking:                0.0841302
+Total simulation step:    0.418049
+Simulation Time = 0.422952 seconds for 500000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.0928551
+Move and count particles: 0.0480925
+Exclusive scan:           0.0320124
+Bin bucketing:            0.156009
+Repacking:                0.0837864
+Total simulation step:    0.413967
+Simulation Time = 0.418616 seconds for 500000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.0931871
+Move and count particles: 0.0484488
+Exclusive scan:           0.0323047
+Bin bucketing:            0.158323
+Repacking:                0.0840052
+Total simulation step:    0.417498
+Simulation Time = 0.422329 seconds for 500000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.168565
+Move and count particles: 0.103304
+Exclusive scan:           0.495649
+Bin bucketing:            0.273355
+Repacking:                0.166234
+Total simulation step:    1.20831
+Simulation Time = 1.21421 seconds for 1000000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.169917
+Move and count particles: 0.103343
+Exclusive scan:           0.505494
+Bin bucketing:            0.274593
+Repacking:                0.166219
+Total simulation step:    1.22077
+Simulation Time = 1.22674 seconds for 1000000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.16871
+Move and count particles: 0.103316
+Exclusive scan:           0.405565
+Bin bucketing:            0.273455
+Repacking:                0.165938
+Total simulation step:    1.11821
+Simulation Time = 1.14079 seconds for 1000000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.768473
+Move and count particles: 0.5101
+Exclusive scan:           1.11685
+Bin bucketing:            1.14959
+Repacking:                0.861371
+Total simulation step:    4.40762
+Simulation Time = 4.42128 seconds for 5000000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.770521
+Move and count particles: 0.509906
+Exclusive scan:           1.06337
+Bin bucketing:            1.14829
+Repacking:                0.862944
+Total simulation step:    4.35628
+Simulation Time = 4.36993 seconds for 5000000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           0.769673
+Move and count particles: 0.510318
+Exclusive scan:           0.950139
+Bin bucketing:            1.14927
+Repacking:                0.86296
+Total simulation step:    4.24357
+Simulation Time = 4.26014 seconds for 5000000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           1.52166
+Move and count particles: 1.01826
+Exclusive scan:           1.40761
+Bin bucketing:            2.22099
+Repacking:                1.7456
+Total simulation step:    7.91534
+Simulation Time = 7.93889 seconds for 10000000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           1.52131
+Move and count particles: 1.01813
+Exclusive scan:           1.33381
+Bin bucketing:            2.22054
+Repacking:                1.74348
+Total simulation step:    7.83851
+Simulation Time = 7.86207 seconds for 10000000 particles.
+
+=== Timer Breakdown (in seconds) ===
+Compute forces:           1.51857
+Move and count particles: 1.01796
+Exclusive scan:           1.376
+Bin bucketing:            2.21931
+Repacking:                1.74332
+Total simulation step:    7.8764
+Simulation Time = 7.89933 seconds for 10000000 particles.
