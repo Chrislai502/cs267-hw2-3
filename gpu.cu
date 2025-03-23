@@ -2,6 +2,8 @@
 #include <cuda.h>
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>
+#include <thrust/device_vector.h>
+
 
 #define NUM_THREADS 256
 
@@ -10,6 +12,7 @@ int blks;
 int* bin_counts = nullptr;
 int* bin_ids = nullptr;
 particle_t* particle_ids = nullptr;
+int* keep_track_array = nullptr;
 
 __device__ void apply_force_gpu(particle_t& particle, particle_t& neighbor) {
     double dx = neighbor.x - particle.x;
@@ -111,36 +114,31 @@ __global__ void move_gpu(particle_t* particles, int num_parts, double size) {
     }
 }
 
-void update_bin_ids_and_particle_ids(particle_t* parts, int num_parts, double size) {
+__global__ void update_bin_ids(particle_t* parts, int* bin_counts, int num_parts, double size) {
+
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+
     double cellsize = cutoff;
     int gridsize = (size / cellsize) + 1;
-    int num_bins = gridsize * gridsize;
 
-    // reset particle_ids and bin_ids
-    memset(bin_counts, 0, num_bins * sizeof(int));
+    int grid_r = parts[tid].y / cellsize;
+    int grid_c = parts[tid].x / cellsize;
+    atomicAdd(&bin_counts[grid_r * gridsize + grid_c], 1);
+}
 
-    // count the number of particles in each bin
-    for (int i = 0; i < num_parts; ++i) {
-        int grid_r = parts[i].y / cellsize;
-        int grid_c = parts[i].x / cellsize;
-        bin_counts[grid_r * gridsize + grid_c]++;
-    }
+__global__ void update_particle_ids(particle_t* parts, int* bin_ids, int* keep_track_array, particle_t* particle_ids, int num_parts, double size) {
 
-    // bin_ids is now an array of the index of each bin
-    thrust::exclusive_scan(thrust::host, bin_counts, bin_counts + num_bins, bin_ids);
-    particle_ids = new particle_t[num_parts];
-    memset(particle_ids, 0, (num_parts) * sizeof(int));
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+
+    double cellsize = cutoff;
+    int gridsize = (size / cellsize) + 1;
 
     // populate particles_ids sorted by bins
-    int keep_track_array[num_bins] = {0}; // keeps track of how far into the bin the next particle should be
-
-    for (int i = 0; i < num_parts; ++i) {
-        int grid_r = parts[i].y / cellsize;
-        int grid_c = parts[i].x / cellsize;
-        int particle_idx = bin_ids[grid_r * gridsize + grid_c] + keep_track_array[grid_r * gridsize + grid_c];
-        keep_track_array[grid_r * gridsize + grid_c]++;
-        particle_ids[particle_idx] = parts[i];
-    }
+    int grid_r = parts[tid].y / cellsize;
+    int grid_c = parts[tid].x / cellsize;
+    int particle_idx = bin_ids[grid_r * gridsize + grid_c] + keep_track_array[grid_r * gridsize + grid_c];
+    atomicAdd(&keep_track_array[grid_r * gridsize + grid_c], 1);
+    particle_ids[particle_idx] = parts[tid];
 }
 
 void init_simulation(particle_t* parts, int num_parts, double size) {
@@ -148,11 +146,6 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
     // This function will be called once before the algorithm begins
     // parts live in GPU memory
     // Do not do any particle simulation here
-
-    // convert parts to cpu for testing
-    particle_t* cpu_parts = new particle_t[num_parts];
-    cudaMemcpy(cpu_parts, parts, num_parts * sizeof(particle_t), cudaMemcpyDeviceToHost);
-
 
     blks = (num_parts + NUM_THREADS - 1) / NUM_THREADS;
 
@@ -162,10 +155,31 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
     int num_bins = gridsize * gridsize;
     bin_counts = new int[num_bins];
     bin_ids = new int[num_bins];
-    memset(bin_ids, 0, (num_bins) * sizeof(int));
+    cudaMalloc(&bin_ids, num_bins * sizeof(int));
+    cudaMalloc(&bin_counts, num_bins * sizeof(int));
+    cudaMemset(bin_ids, 0, num_bins * sizeof(int));
+    cudaMemset(bin_counts, 0, num_bins * sizeof(int));
 
-    update_bin_ids_and_particle_ids(cpu_parts, num_parts, size);
-    delete[] cpu_parts;
+    std::cout << "here 1" << std::endl;
+
+    // reset particle_ids and bin_ids
+    update_bin_ids<<<blks, NUM_THREADS>>>(parts, bin_counts, num_parts, size);
+
+    auto device_bin_counts = thrust::device_pointer_cast(bin_counts);
+    auto device_bin_ids = thrust::device_pointer_cast(bin_ids);
+
+    std::cout << "here 2" << std::endl;
+
+    // bin_ids is now an array of the index of each bin
+    thrust::exclusive_scan(thrust::device, device_bin_counts, device_bin_counts + num_bins, device_bin_ids);
+    particle_ids = new particle_t[num_parts];
+    cudaMalloc(&particle_ids, num_parts * sizeof(int));
+
+    std::cout << "here 3" << std::endl;
+
+    cudaMalloc(&keep_track_array, gridsize * gridsize * sizeof(int));
+    update_particle_ids<<<blks, NUM_THREADS>>>(parts, bin_ids, keep_track_array, particle_ids, num_parts, size);
+    std::cout << "here 4 " << device_bin_ids[0] << " " << device_bin_ids[1] << std::endl;
 }
 
 // list of adjacencies
@@ -182,18 +196,21 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
     // Move particles
     // move_gpu<<<blks, NUM_THREADS>>>(parts, num_parts, size);
 
+    std::cout << "here 4.5" << std::endl;
+
     // convert parts to cpu for testing
     particle_t* cpu_parts = new particle_t[num_parts];
     cudaMemcpy(cpu_parts, parts, num_parts * sizeof(particle_t), cudaMemcpyDeviceToHost);
-
 
     double cellsize = cutoff;
     int gridsize = (size / cellsize) + 1;
     int num_bins = gridsize * gridsize;
 
+    std::cout << "here 4.6" << std::endl;
 
     for (int b = 0; b < num_bins; ++b) {
         // iterate through particles in bin
+        std::cout << "heree " << bin_ids[0] << " " << bin_ids[1] << std::endl;
         for (int par_id = bin_ids[b]; par_id < bin_ids[b] + bin_counts[b]; ++par_id) {
             particle_t* cur_particle = &particle_ids[par_id];
             cur_particle->ax = cur_particle->ay = 0;
@@ -201,22 +218,30 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
             int r = cur_particle->y / cellsize;
             int c = cur_particle->x / cellsize;
 
+            std::cout << "here 4.7" << std::endl;
+
             for (int i = 0; i < 9; ++i) {
                 int new_r = r + ALL_ADJ[i][0];
                 int new_c = c + ALL_ADJ[i][1];
+
+                std::cout << "here 4.8" << std::endl;
                 
                 int neigh_bin_idx = new_r * gridsize + new_c;
                 if (neigh_bin_idx >= 0 && neigh_bin_idx < num_bins) {
                     int particle_idx = bin_ids[neigh_bin_idx];
                     // neighbors are particles in neighboring cells
+                    std::cout << "here 4.9" << std::endl;
                     for (int neigh = particle_idx; neigh < particle_idx + bin_counts[neigh_bin_idx]; ++neigh) {
                         particle_t* neigh_particle = &particle_ids[neigh];
+                        std::cout << "here 4.95" << std::endl;
                         apply_force(*cur_particle, *neigh_particle);
                     }
                 }
             }            
         }
     }
+
+    std::cout << "here 5" << std::endl;
 
     // move and adjust grid assignments for each particle
     for (int i = 0; i < num_parts; ++i) {
@@ -226,8 +251,29 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
         
         // move the particle to its new grid cell
         move(*particle, size);
+        // move_gpu<<<blks, NUM_THREADS>>>(parts, num_parts, size);
 
     }
-    update_bin_ids_and_particle_ids(cpu_parts, num_parts, size);
+    // reset particle_ids and bin_ids
+    cudaMemset(bin_counts, 0, num_bins * sizeof(int));
+
+    std::cout << "here 6" << std::endl;
+
+    update_bin_ids<<<blks, NUM_THREADS>>>(parts, bin_counts, num_parts, size);
+
+    std::cout << "here 7" << std::endl;
+
+    // bin_ids is now an array of the index of each bin
+    thrust::exclusive_scan(thrust::host, bin_counts, bin_counts + num_bins, bin_ids);
+    particle_ids = new particle_t[num_parts];
+    cudaMemset(particle_ids, 0, (num_parts) * sizeof(int));
+
+    std::cout << "here 8" << std::endl;
+
+    cudaMemset(keep_track_array, 0, gridsize * gridsize * sizeof(int));
+    update_particle_ids<<<blks, NUM_THREADS>>>(parts, bin_ids, keep_track_array, particle_ids, num_parts, size);
+
+    std::cout << "here 9" << std::endl;
+
     delete[] cpu_parts;
 }
